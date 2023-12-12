@@ -14,6 +14,8 @@ using namespace std::chrono;
 #include "/w/halla-scshelf2102/sbs/jboyd/include/GEM_lookups.h"
 #include "/w/halla-scshelf2102/sbs/jboyd/include/beam_variables.h"
 #include "/w/halla-scshelf2102/sbs/jboyd/include/utility_functions.h"
+#include "/w/halla-scshelf2102/sbs/jboyd/include/experimental_constants.h"
+#include "/w/halla-scshelf2102/sbs/jboyd/include/calc_dy_as_HCalx_sub_xExp.C"
 // #include "/w/halla-scshelf2102/sbs/jboyd/include/MC_lookups.h"
 
 bool print_extra = false;
@@ -35,9 +37,9 @@ double VectorMean(std::vector<T> const& v){
 	return std::accumulate(v.begin(), v.end(), 0.0)/v.size();
 }
 
-bool single_run = false;
-bool multi_run = true;
-bool use_parsed = false;
+bool single_run = true;
+bool multi_run = false;
+bool use_parsed = true;
 
 bool calc_W = true;
 bool use_heavy_cut = false;
@@ -57,9 +59,10 @@ TString ADC_timing_string = "";
 
 //Run info and lookups
 TString run_target = "LD2";
-int kine = 8;
-int sbsfieldscale = 70;
+int kine = 4;
+int sbsfieldscale = 30;
 double sbsfieldscale_Frac = sbsfieldscale/100.0;
+
 
 //*-*-*-*-*-*-*-*-*-*-*
 //BEST CLUSTER BOOLEANS
@@ -96,10 +99,11 @@ TString experiment = "gmn";
 int pass;
 
 //Experimental Lookup Parameters
-double E_beam = lookup_beam_energy_from_kine(kine); //Electron beam energy (electron energy) in GeV
+// double E_beam = lookup_beam_energy_from_kine(kine); //Electron beam energy (electron energy) in GeV
 double SBS_field = sbsfieldscale; //Strength (in percentage) of SBS magnet
 
-double BB_dist, BB_theta, W_mean, W_sigma;
+//BB_dist, BB_theta, 
+double W_mean, W_sigma;
 double dx_p, dx_p_sigma, dy_p, dy_p_sigma, dx_n, dx_n_sigma, dy_n, dy_n_sigma, dx_pn_max, dx_pn_mean_center;
 
 TString rootfile_dir;
@@ -119,27 +123,12 @@ double dx_p_scale = 1.0;
 double dx_n_scale = 1.0;
 double dy_scale = 1.0;
 
-//Experimental Constants, Thresholds, cuts, etc DEFINITIONS
-const double pi = TMath::Pi();
-const double Mp = 0.938272; //Mass of proton [GeV]
-const double Mn = 0.939565; //Mass of neutron [GeV]
-const double Me = 0.00051; //Mass of electron [GeV]
-
-//SBS Magnet
-const Double_t Dgap = 48.0*2.54/100.0; //about 1.22 m
-const Double_t maxSBSfield = 1.26; //Tesla
-const Double_t SBSdist = 2.25; //m
-const Double_t dipGap = 1.22; //m
-const Double_t sbsmaxfield = 3.1 * atan( 0.85/(11.0 - 2.25 - 1.22/2.0 ))/0.3/1.22/0.7;
-
 double W2_mean; //Invariant Mass-squared (mean val) {With perfect optics W2 = Mp. Can be calculated run-by-run}
 double W2_sigma; //Invariant Mass-squared sigma {Reasonable default/guess. Can be calculated run-by-run from W plot}
 
 //HCal constants and stuff
 double tdiff = 510;		//Time difference between BBCal and HCal signals
 double tdiff_max = 10;	//Maximum time difference from coincidences through tdctrig cut
-double HCal_dist; 	//Distace from HCal face to target chamber
-double HCal_theta;		//Theta angle for HCal from downstream beamline
 double scint_intersect, x_expected_HCal, y_expected_HCal;
 double ADC_time_min, ADC_time_max, ADC_diff_time_min, ADC_diff_time_max, ADC_time_mean;
 
@@ -147,49 +136,6 @@ double ADC_time_min, ADC_time_max, ADC_diff_time_min, ADC_diff_time_max, ADC_tim
 double e_prime_theta; //Scattered electron theta angle
 double e_prime_phi; //Scattered electron phi angle
 double p_el, nu, pp, nucleon_theta, nucleon_phi, E_ep, p_ep, Q2, W, W2, E_pp, E_nucleon, KE_p, dx, dy;
-
-//Static Detector Parameters
-const int maxTracks = 1000; // Reasonable limit on tracks to be stored per event
-const int maxTdcChan = 10; // Set to accomodate original 5 TDCTrig channels with buffer
-// const double hcal_height = -0.2897; // Height of HCal above beamline
-double hcal_height;
-
-const Double_t sampfrac = 0.077; 	//Estimate of the sampling fraction from MC
-const Int_t kNcell = 288; // Total number of HCal modules
-const Int_t kNrows = 24; // Total number of HCal rows
-const Int_t kNcols = 12; // Total number of HCal columns
-const Int_t kNtrack = 100; // Reasonable max number of tracks per event
-const Int_t kNtdc = 1000; // Reasonable max number of tdc signals per event
-const Int_t max_clus = 10;
-
-//Values have ben updated -- Known as of Oct 1, 2023......
-const Double_t Xi = -2.655; //Distance from beam center to top of HCal in meters, from database
-const Double_t Xf = 1.155; //Distance from beam center to bottom of HCal in meters, from database
-const Double_t Yi = -0.92964; //Distance from beam center to opposite-beam side of HCal in meters, from MC database
-const Double_t Yf = 0.92964; //Distance from beam center to beam side of HCal in meters, from MC database
-
-//PRevious values:
-// const Double_t Xi = -2.20; // Distance from beam center to top of HCal in m
-// const Double_t Xf = 1.47; // Distance from beam center to bottom of HCal in m
-// const Double_t Yi = -0.853; // Distance from beam center to opposite-beam side of HCal in m
-// const Double_t Yf = 0.853; // Distance from beam center to beam side of HCal in m
-
-//Static Target Parameters
-const double l_tgt = 0.15; // Length of the target (m)
-const double rho_tgt = 0.0723; // Density of target (g/cc)
-const double rho_Al = 2.7; // Density of aluminum windows (g/cc)
-const double cell_diameter = 1.6*2.54; //cm, right now this is a guess
-const double Ztgt = 1.0;
-const double Atgt = 1.0;
-const double Mmol_tgt = 1.008; //g/mol
-
-//For energy-loss correction to beam energy:
-const double dEdx_tgt=0.00574; //According to NIST ESTAR, the collisional stopping power of hydrogen is about 5.74 MeV*cm2/g at 2 GeV energy
-const double dEdx_Al = 0.0021; //According to NIST ESTAR, the collisional stopping power of Aluminum is about 2.1 MeV*cm2/g between 1-4 GeV
-const double uwallthick_LH2 = 0.0145; //cm
-const double dwallthick_LH2 = 0.015; //cm
-const double cellthick_LH2 = 0.02; //cm, this is a guess;
-const double Alshieldthick = 2.54/8.0; //= 1/8 inch * 2.54 cm/inch
 
 double p_recon, nu_recon, E_loss, E_corr, theta_pq_n, theta_pq_p;
 
@@ -232,6 +178,10 @@ TH1D *h_hcal_clusblk_ADC_time_cut, *h_hcal_clusblk_ADC_time_diff_cut;
 TH1D *h_W_cut, *h_W_fcut, *h_vz_cut, *h_Ep, *h_PS, *h_SHPS;
 TH1D *h_SHPS_wcut, *h_Ep_wcut;
 TH1D *h_theta_pq_n, *h_theta_pq_p, *h_theta_pq_n_cut, *h_theta_pq_p_cut, *h_theta_pq_n_anticut, *h_theta_pq_p_anticut;
+TH1D *h_q_vec, *h_dx_large_W_cut, *h_dy_large_W_cut;
+TH2D *h_dx_W2, *h_dx_W, *h_dy_W2, *h_dy_W;
+TH1D *h_p_miss, *h_p_miss_pos, *h_p_miss_neg;
+TH1D *h_p_nucleon, *h_p_proton;
 
 TH1D *h_Q2, *h_E_ep, *h_E_pp;
 TH1D *h_dy, *h_dy_cut, *h_dy_wcut, *h_dx, *h_dx_cut, *h_dx_wcut, *h_dx_fcut, *h_dx_wcut_fcut, *h_dy_wcut_fcut;
@@ -246,6 +196,10 @@ TH2D *h_E_ecorr_vs_vert;
 TH2D *h_dxdy, *h_dxdy_cut, *h_dxdy_wcut, *h_dxdy_ncut, *h_dxdy_pcut, *h_dxdy_fcut, *h_dxdy_wcut_fcut, *h_dxdy_wcut_fcut_ADCtiming, *h_dxdy_wcut_fcut_AntiADCtiming;
 TH2D *h_dxdy_wcut_2multfcut, *h_dxdy_wcut_15multfcut;
 TH2D *h_xy, *h_xy_cut, *h_xy_fcut, *h_xy_cut_p, *h_xy_cut_n, *h_PAngleCorr_theta, *h_PAngleCorr_phi;
+
+TH2D *h_HCal_xy_fcut, *h_HCal_xy_std, *h_HCal_posHCalXY;
+
+TH1D *h_dx_dyW_select_cut_dy15_W15, *h_dx_dyW_select_cut_dy00_W15;
 
 double n_integral, p_integral, n_center, n_sigma, p_center, p_sigma;
 double p_Beam, E_loss_outgoing;
@@ -277,6 +231,13 @@ void dxdy_parsed_files_byKine(){
 	cout << "--------------------------------------" << endl;
 	cout << "Analysis started. " << endl;
 	cout << "--------------------------------------" << endl;
+
+	E_beam = lookup_beam_energy_from_kine(kine);
+	BB_dist = lookup_BB_dist_by_kine(kine);
+	BB_theta = lookup_BB_angle_by_kine(kine, "rad");
+	HCal_dist = lookup_HCal_dist_by_kine(kine);
+	HCal_theta = lookup_HCal_angle_by_kine(kine, "rad");
+
 	for(int i = 0; i < lookup_parsed_runs_cnt(run_target.Data(), kine, sbsfieldscale); i++){
 		runnum_vec.push_back(lookup_parsed_runnums(run_target.Data(), kine, sbsfieldscale, i));
 	}
@@ -285,6 +246,9 @@ void dxdy_parsed_files_byKine(){
 		pass = 0;
 	}
 	if( kine == 8 ){
+		pass = 1;
+	}
+	if( kine == 9 ){
 		pass = 1;
 	}
 
@@ -307,7 +271,8 @@ void dxdy_parsed_files_byKine(){
 		best_cluster_OnOff_indicated = Form("_%s", hcal_cluster_minimize.Data() );
 	}
 
-	outfile = new TFile(Form("rootfiles/%s_SBS%i_mag%i%s_dxdy%s_elastics_only_trPfact_100_bestCluster_%i%s%s_08_10_2023.root", run_target.Data(), kine, sbsfieldscale, pq_cut_String.Data(), parsed_sel_string.Data(), use_best_cluster,  best_cluster_OnOff_indicated.Data(), ADC_timing_string.Data() ), "RECREATE");		
+
+	outfile = new TFile(Form("rootfiles/%s_SBS%i_mag%i%s_dxdy%s_elastics_only_bestCluster_%i%s%s_added_Wplots_08_12_2023.root", run_target.Data(), kine, sbsfieldscale, pq_cut_String.Data(), parsed_sel_string.Data(), use_best_cluster,  best_cluster_OnOff_indicated.Data(), ADC_timing_string.Data() ), "RECREATE");		
 
 Int_t nBins_x_dxdy = 300;
 Double_t xmin_dxdy = -1.5;
@@ -325,12 +290,29 @@ Double_t ymax_dxdy = 2.5;
 	h_W = new TH1D("h_W", Form("Invariant Mass W - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 300, 0.0, 3.0);
 	h_W_cut = new TH1D("h_W_cut", Form("Invariant Mass W (Coin & Vert Cuts) - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 300, 0.0, 3.0);
 	h_W_fcut = new TH1D("h_W_fcut", Form("Invariant Mass W (Fiduc. Cuts) - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 300, 0.0, 3.0);
-	h_W2 = new TH1D("h_W2", Form("Invariant Mass Squared W^{2} - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 300, 0.0, 3.0);
+	h_W2 = new TH1D("h_W2", Form("Invariant Mass Squared W^{2} - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 600, 0.0, 6.0);
 	h_W2recon = new TH1D("h_W2recon", Form("Invariant Mass Squared W^{2} Recon - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 300, 0.0, 3.0);
 	h_KE_p = new TH1D("h_KE_p", Form("Scattered Proton Kinetic Energy - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 1.5*E_beam);
 	h_tr_p = new TH1D("h_tr_p", Form("Scattered electron track momentum - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 5.0);
 	h_tr_p_wcut = new TH1D("h_tr_p_wcut", Form("Scattered electron track momentum (with W2 cut)- SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 5.0);
 	h_HCal_e = new TH1D("h_HCal_e", Form("HCal Clus. E (HCal_E > 0) - SBS%i = %i%%, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0, 1.0);
+
+	h_q_vec = new TH1D("h_q_vec", Form("q vector - SBS%i = %i%%, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0, 5.0);
+	h_dx_large_W_cut = new TH1D("h_dx_large_W_cut", Form("dx with only W > 1.5082720 - SBS%i %i, %s; x_{HCal} - x_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
+	h_dy_large_W_cut = new TH1D("h_dy_large_W_cut",Form("dy with only W > 1.5082720 - SBS%i %i, %s; y_{HCal} - y_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy);
+
+	h_dx_W = new TH2D("h_dx_W", Form("dx vs W without any W cuts - SBS%i mag%i %s; W (GeV); dx, x_{HCal} - x_{exp} (m)", kine, sbsfieldscale, run_target.Data()), 300, 0.0, 3.0, 500, -2.5, 2.5);
+	h_dx_W2 = new TH2D("h_dx_W2", Form("dx vs W^{2} without any W cuts - SBS%i mag%i %s; W^{2} (GeV); dx, x_{HCal} - x_{exp} (m)", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 5.0, 500, -2.5, 2.5);
+
+	h_dy_W = new TH2D("h_dy_W", Form("dy vs W without any W cuts - SBS%i mag%i %s; W (GeV); dy, y_{HCal} - y_{exp} (m)", kine, sbsfieldscale, run_target.Data()), 300, 0.0, 3.0, nBins_x_dxdy, xmin_dxdy, xmax_dxdy);
+	h_dy_W2 = new TH2D("h_dy_W2", Form("dy vs W^{2} without any W cuts - SBS%i mag%i %s; W^{2} (GeV); dy, y_{HCal} - y_{exp} (m)", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 5.0, nBins_x_dxdy, xmin_dxdy, xmax_dxdy);
+
+	h_p_miss = new TH1D("h_p_miss", Form("Missing momentum, p_{miss}, SBS%i mag%i %s; p_{miss} (GeV)", kine, sbsfieldscale, run_target.Data()), 500, -1.0, 1.0);
+	h_p_miss_pos = new TH1D("h_p_miss_pos", Form("Missing momentum, p_{miss}, positive convention, SBS%i mag%i %s; p_{miss, +} (GeV)", kine, sbsfieldscale, run_target.Data()), 500, -1.0, 1.0);
+	h_p_miss_neg = new TH1D("h_p_miss_neg", Form("Missing momentum, p_{miss}, negative convetion, SBS%i mag%i %s; p_{miss, -} (GeV)", kine, sbsfieldscale, run_target.Data()), 500, -1.0, 1.0);
+
+	h_p_nucleon = new TH1D("h_p_nucleon", Form("Scattered nucleon momentum - SBS%i mag%i %s; p_{Nucleon} (GeV)", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 5.0);
+	h_p_proton = new TH1D("h_p_proton", Form("Scattered proton momentum - SBS%i mag%i %s; p_{proton} (GeV)", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 5.0);
 
 	h_Ep = new TH1D("h_Ep", Form("E/p - SBS%i = %i%%, %s", kine, sbsfieldscale, run_target.Data()), 200, 0, 2);
 	h_Ep_wcut = new TH1D("h_Ep_wcut", Form("E/p (wcut)- SBS%i = %i%%, %s", kine, sbsfieldscale, run_target.Data()), 200, 0, 2);	
@@ -352,6 +334,10 @@ Double_t ymax_dxdy = 2.5;
 	h_dx_wcut = new TH1D("h_dx_wcut",Form("dx (W cut) - SBS%i %i, %s; x_{HCal} - x_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
 	h_dx_fcut = new TH1D("h_dx_fcut",Form("dx (f cut) - SBS%i %i, %s; x_{HCal} - x_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
 	h_dx_wcut_fcut = new TH1D("h_dx_wcut_fcut",Form("dx (W & Fiduc. Cuts) - SBS%i %i, %s; x_{HCal} - x_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
+
+	h_dx_dyW_select_cut_dy00_W15 = new TH1D("h_dx_dyW_select_cut_dy00_W15", Form("dx for select dy vs W region: dy = -0.5 - 0.5, W = 1.25 - 1.75 - SBS%i mag%i %s; x_{HCal} - x_{exp} (m)", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
+	h_dx_dyW_select_cut_dy15_W15 = new TH1D("h_dx_dyW_select_cut_dy15_W15", Form("dx for select dy vs W region: dy = 1 - 1.5, W = 1.25 - 1.75 - SBS%i mag%i %s; x_{HCal} - x_{exp} (m)", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
+
 	h_dy = new TH1D("h_dy",Form("dy (NO CUTS) - SBS%i %i, %s; y_{HCal} - y_{exp} (m);", kine, sbsfieldscale, run_target.Data()), 500, -1.25,1.25);
 	h_dy_cut = new TH1D("h_dy_cut",Form("dy (Basic Cuts) - SBS%i %i, %s; y_{HCal} - y_{exp} (m);", kine, sbsfieldscale, run_target.Data()), 500, -1.25,1.25);  
 	h_dy_wcut = new TH1D("h_dy_wcut",Form("dy (W Cuts) - SBS%i %i, %s; y_{HCal} - y_{exp} (m);", kine, sbsfieldscale, run_target.Data()), 500, -1.25,1.25);
@@ -376,6 +362,8 @@ Double_t ymax_dxdy = 2.5;
 	h_xy_cut_p = new TH2D("h_xy_cut_p", Form("HCal Hadron Spots (x, y) (p CUT) - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()),12,-0.9,0.9,24,-2.165,1.435);
 	h_xy_cut_n = new TH2D("h_xy_cut_n", Form("HCal Hadron Spots (x, y) (n CUT) - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()),12,-0.9,0.9,24,-2.165,1.435);
 
+	h_HCal_xy_std = new TH2D("h_HCal_xy_std", Form("HCal x and y, raw - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()), 400, -2.0, 2.0, 600, -3.0, 3.0);
+
 	h_hcal_clusblk_ADC_time = new TH1D("h_hcal_clusblk_ADC_time", Form("ADC time of the highest energy block in the largest cluster - SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 300, -100, 200);
 	h_hcal_clusblk_ADC_time_cut = new TH1D("h_hcal_clusblk_ADC_time_cut", Form("ADC time of the highest energy block in the largest cluster (Cut window)- SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 300, -100, 200);
 
@@ -398,6 +386,25 @@ Double_t ymax_dxdy = 2.5;
 
 	h_Nevents = new TH1D("h_Nevents", "Number of passing events", 1, 0, 1);
 	h_eclus_sel = new TH1D("h_eclus_sel", "Index of hcal cluster selected", 10, 0, 10);
+
+	// h_HCal_posHCalXY = new TH2D("h_HCal_posHCalXY", Form("HCal Boundary as defined in by posHCal Xi, Xf, Yi, Yf - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()), 800, -2.0, 2.0, 1200, -3.0, 3.0);
+	// h_HCal_posHCalXY->Draw();
+	// TLine *tl_posHCal_left = new TLine( posHCalYi, posHCalXi, posHCalYi, posHCalXf );
+	// TLine *tl_posHCal_right = new TLine( posHCalYf, posHCalXi, posHCalYf, posHCalXf );
+	// TLine *tl_posHCal_top = new TLine( posHCalYi, posHCalXf, posHCalYf, posHCalXf );
+	// TLine *tl_posHCal_bottom = new TLine( posHCalYi, posHCalXi, posHCalYf, posHCalXi );
+	// tl_posHCal_left->Draw("same");
+	// tl_posHCal_right->Draw("same");
+	// tl_posHCal_top->Draw("same");
+	// tl_posHCal_right->Draw("same");
+
+	TPaveText *tpt_posHCal = new TPaveText(0.5, 0.70, 0.8, 0.85, "NDC");
+	tpt_posHCal->AddText(Form("posHCalXi = %0.4f", posHCalXi));
+	tpt_posHCal->AddText(Form("posHCalXf = %0.4f", posHCalXf));
+	tpt_posHCal->AddText(Form("posHCalYi = %0.4f", posHCalYi));
+	tpt_posHCal->AddText(Form("posHCalYf = %0.4f", posHCalYf));
+	tpt_posHCal->Draw("same");
+
 	cout << "Pulling experimental, fit, and other variables..." << endl;
 
 	if( kine == 4 ){
@@ -412,16 +419,16 @@ Double_t ymax_dxdy = 2.5;
 		// hcal_height = -0.40010038000; //16930;
 		//more negative puts the dx_n more negative
 		hcal_height = -0.37064142; //-0.37733888; //-0.38368348; //16930; -0.3954, -0.36061770, -0.36765899
+		//Dec. 9, 2023:
+		// hcal_height = -0.37434142;
+
 	}
 	if( kine == 9 ){
 		hcal_height = -0.36191616; //-0.36307351; // -0.36249082 //-0.35863270 //more negative puts the dx_n more negative
 	}
 
 
-	BB_dist = lookup_BB_dist_by_kine(kine);
-	BB_theta = lookup_BB_angle_by_kine(kine, "rad");
-	HCal_dist = lookup_HCal_dist_by_kine(kine);
-	HCal_theta = lookup_HCal_angle_by_kine(kine, "rad");
+
 	W_mean = lookup_parsed_cut(run_target, kine, sbsfieldscale, "W");
 	W_sigma = lookup_parsed_cut(run_target, kine, sbsfieldscale, "W_sigma");
 
@@ -498,7 +505,10 @@ Double_t ymax_dxdy = 2.5;
 
 
 	if( kine == 11 ){
-		rootfile_dir = "/volatile/halla/sbs/adr/Rootfiles/gmn_parsed/SBS11/pass1/";
+		rootfile_dir = "/volatile/halla/sbs/adr/Rootfiles/gmn_parsed/SBS11/pass1";
+	}
+	if( kine == 14 ){
+		rootfile_dir = "/w/halla-scshelf2102/sbs/sbs-gmn/pass1/SBS14/LD2/rootfiles";
 	}
 	if( kine == 4 ){
 		rootfile_dir = Form("/volatile/halla/sbs/adr/Rootfiles/gmn_parsed/SBS%i/pass%i/", kine, pass);
@@ -529,7 +539,7 @@ Double_t ymax_dxdy = 2.5;
 		// rootfile_dir = Form("/volatile/halla/sbs/seeds/parse/sbs%i_%s_mag%i/", kine, run_target.Data(), sbsfieldscale);
  		// rootfile_dir = Form("/volatile/halla/sbs/adr/Rootfiles/gmn_parsed/SBS%i/pass%i/", kine, pass);
  		if( multi_run ){
- 			rootfile_dir = Form("/work/halla/sbs/sbs-gmn/pass%i/SBS%i/%s/rootfiles/", 1, kine, run_target.Data());
+ 			rootfile_dir = Form("/work/halla/sbs/sbs-gmn/pass%i/SBS%i/%s/rootfiles/", pass, kine, run_target.Data());
  		}
  		if( !multi_run ){
   			rootfile_dir = "/lustre19/expphy/volatile/halla/sbs/jboyd/analysis_rootfiles/jboyd_parsed";			
@@ -537,7 +547,11 @@ Double_t ymax_dxdy = 2.5;
 
  	}
 
-
+ 	cout << endl;
+ 	cout << "------------------------------------" << endl;
+ 	cout << "Rootfile dir: " << rootfile_dir.Data() << endl;
+ 	cout << "------------------------------------" << endl;
+ 	cout << endl;
 
 	if( single_run ){
 
@@ -547,7 +561,8 @@ Double_t ymax_dxdy = 2.5;
 				TC->Add(Form("%s/gmn_parsed_SBS%i_targ%s_sbsmagscale%i.root", rootfile_dir.Data(), kine, run_target.Data(), sbsfieldscale) );
 			}
 			if( kine == 4 ){
-				TC->Add(Form("%s/gmn_parsed_SBS%i_targ%s_sbsmagscale%i.root", rootfile_dir.Data(), kine, run_target.Data(), sbsfieldscale) );
+				// TC->Add(Form("%s/gmn_parsed_SBS%i_targ%s_sbsmagscale%i.root", rootfile_dir.Data(), kine, run_target.Data(), sbsfieldscale) );
+				TC->Add(Form("%s/gmn_parsed_LD2_SBS4_mag30.root", rootfile_dir.Data()));
 			}
 			else{
 				// TC->Add(Form("%s/gmn_parsed_fulltree_SBS%i_%s_mag%i*",rootfile_dir.Data(), kine, run_target.Data(), sbsfieldscale));
@@ -720,6 +735,11 @@ Double_t ymax_dxdy = 2.5;
 	// hcal_x_fmin = -2.015;
 	// hcal_x_fmax = 1.285;
 
+	if( kine == 4 ){
+		Ep_sig_mult = 3.0;
+		SH_PS_sig_mult = 3.0;		
+	}
+
 	if( kine == 8 ){
 		Ep_sig_mult = 2.0;
 		SH_PS_sig_mult = 2.0;		
@@ -733,6 +753,40 @@ Double_t ymax_dxdy = 2.5;
 	Ep_max = lookup_parsed_cut(run_target, kine, sbsfieldscale, "Ep") + Ep_sig_mult*lookup_parsed_cut(run_target, kine, sbsfieldscale, "Ep_sigma");
 	SH_PS_min = lookup_parsed_cut(run_target, kine, sbsfieldscale, "SH_PS_mean") - SH_PS_sig_mult*lookup_parsed_cut(run_target, kine, sbsfieldscale, "SH_PS_sigma")/2.0;
 
+	if( kine == 4 ){
+		master_cut_vec = {
+				"sbs.hcal.nclus>0",
+				"bb.ps.nclus>0",
+				"bb.sh.nclus>0",
+				"abs(bb.tr.vz[0])<0.075",
+				"bb.gem.track.nhits[0]>3",
+				"bb.tr.n==1",
+				"bb.ps.e>0.15",
+				// Form("bb.tr.p[0]>%f", 1.10*lookup_parsed_cut(run_target.Data(), kine, sbsfieldscale, "SH_PS_mean") ),
+				// "sbs.hcal.e>0.05",
+				// // "((abs(((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))))-0.98)<0.15",
+				// "bb.ps.e+bb.sh.e>2.5"; -->bb.tr.p[0]
+				// // Form("bb.ps.e>%f", lookup_parsed_cut(run_target, kine, sbsfieldscale, "PS_min")),
+				// Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)&&((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))<(%f)", Ep_min, Ep_max),
+				// // // // Form("((abs(((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))))-%f)<%f", lookup_parsed_cut(runnum, "Ep"), lookup_parsed_cut(runnum, "Ep_sigma")),
+				// Form("sbs.hcal.e>%f",lookup_parsed_cut(run_target, kine, sbsfieldscale, "HCal_clus_e_cut")),
+				Form("(bb.sh.e+bb.ps.e)>%f", SH_PS_min),
+				Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)", 0.0)
+			};
+	}
+	if( kine == 14 || kine == 11 ){
+		if( !use_parsed ){
+			master_cut_vec = {
+				"sbs.hcal.nclus>0",
+				"bb.ps.nclus>0",
+				"bb.sh.nclus>0",
+				"abs(bb.tr.vz[0])<0.075",
+				"bb.gem.track.nhits[0]>3",
+				"bb.tr.n==1",
+				"bb.ps.e>0.15",
+			};
+		}
+	}
 	if( kine == 8 ){
 		if( !use_parsed ){
 			master_cut_vec = {
@@ -773,6 +827,7 @@ Double_t ymax_dxdy = 2.5;
 			}
 		if( use_parsed ){
 			master_cut_vec = {
+				"sbs.hcal.e>0.005",
 				"sbs.hcal.nclus>0",
 				"bb.ps.nclus>0",
 				"bb.sh.nclus>0",
@@ -780,6 +835,8 @@ Double_t ymax_dxdy = 2.5;
 				"bb.gem.track.nhits[0]>2",
 				"bb.tr.n==1",
 				"bb.ps.e>0.15",
+				Form("(bb.sh.e+bb.ps.e)>%f", SH_PS_min),
+				Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)", 0.0)
 				};
 			}
 	}
@@ -797,10 +854,11 @@ Double_t ymax_dxdy = 2.5;
 				// // "((abs(((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))))-0.98)<0.15",
 				// "bb.ps.e+bb.sh.e>2.5"; -->bb.tr.p[0]
 				// // Form("bb.ps.e>%f", lookup_parsed_cut(run_target, kine, sbsfieldscale, "PS_min")),
-				Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)&&((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))<(%f)", Ep_min, Ep_max),
+				// Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)&&((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))<(%f)", Ep_min, Ep_max),
 				// // // // Form("((abs(((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))))-%f)<%f", lookup_parsed_cut(runnum, "Ep"), lookup_parsed_cut(runnum, "Ep_sigma")),
 				// Form("sbs.hcal.e>%f",lookup_parsed_cut(run_target, kine, sbsfieldscale, "HCal_clus_e_cut")),
-				Form("(bb.sh.e+bb.ps.e)>%f", SH_PS_min)
+				Form("(bb.sh.e+bb.ps.e)>%f", SH_PS_min),
+				Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)", 0.0)
 			};
 	}
 	for(size_t cut = 0; cut < master_cut_vec.size(); cut++){
@@ -974,7 +1032,7 @@ Double_t ymax_dxdy = 2.5;
       	// 	cout << "--------------------------------------------------------------" << endl;
       	// 	cout << "**************************************************************" << endl;
       	// } 
-
+		h_HCal_xy_std->Fill( hcal_y, hcal_y );
 
       	if( correct_beam_energy ){
       		Eloss = (bb_tr_vz[0]+l_tgt/2.0) * rho_tgt * dEdx_tgt + uwallthick_LH2 * rho_Al * dEdx_Al; //approximately 3 MeV
@@ -1045,12 +1103,22 @@ Double_t ymax_dxdy = 2.5;
       	//Reconstructed momentum, corrected for mean loss exiting the target
 		p_recon = bb_tr_p[0] + E_loss_outgoing; 
 
+		h_p_nucleon->Fill(p_recon);
+
 		TLorentzVector k_prime_recon(p_recon*bb_tr_px[0]/bb_tr_p[0], p_recon*bb_tr_py[0]/bb_tr_p[0], p_recon*bb_tr_pz[0]/bb_tr_p[0], p_recon);
 		TLorentzVector q_recon = P_beam - k_prime_recon;
 		TVector3 qvec_recon = q_recon.Vect();
 
+		h_q_vec->Fill(qvec_recon.Mag());
+
 	//Calculate q vector as beam momentum - scattered k
 		TLorentzVector q = P_beam - k_prime;
+
+		double p_miss;
+		p_miss = qvec_recon.Mag() - E_pp;
+
+		h_p_miss->Fill(p_miss);
+
 
 	//Expected neutron direction
 		TVector3 Neutron_Direction = (HCAL_pos - vertex).Unit();
@@ -1063,6 +1131,16 @@ Double_t ymax_dxdy = 2.5;
 		// double Proton_Deflection = dx_pn_max;
 
 		TVector3 Proton_Direction = (HCAL_pos + Proton_Deflection*HCAL_xaxis - vertex).Unit();
+
+		//By convention, the missing momentum is considered positive if p_miss dot q_vec is positive
+		// and negative if p_miss dot q_vec is negative
+
+		if( qvec_recon.Dot(Proton_Direction.Unit()) > 0 ){
+			h_p_miss_pos->Fill(p_miss);
+		}
+		if( qvec_recon.Dot(Proton_Direction.Unit()) < 0 ){
+			h_p_miss_neg->Fill(p_miss);
+		}			
 
 		// theta_pq_n = acos( Neutron_Direction.Dot( q.Vect() ) );
 		// theta_pq_p = acos( Proton_Direction.Dot( q.Vect() ) );
@@ -1200,7 +1278,9 @@ Double_t ymax_dxdy = 2.5;
 		//Use the electron kinematics to predict the proton momedntum assuming elastic scattering on free proton at rest (will need to correct for fermi motion):
 		E_pp = nu + Mp; // Get energy of the proton
 		E_nucleon = sqrt(pow(pp,2)+pow(Mp,2)); // Check on E_pp, same
-		h_E_pp->Fill( E_pp ); // Fill histogram
+		h_E_pp->Fill( E_nucleon ); // Fill histogram
+
+		h_p_nucleon->Fill(E_nucleon);
 
 		KE_p = nu; // For elastics
 		h_KE_p->Fill( KE_p );
@@ -1223,8 +1303,16 @@ Double_t ymax_dxdy = 2.5;
 
 		if( !use_best_cluster ){
 			dx = hcal_x - x_expected_HCal;
-			dy = hcal_y - y_expected_HCal;				
+			dy = hcal_y - y_expected_HCal;		
+
+			//testing dy calc function:
+			// dy = calc_dy_as_HCalx_sub_xExp( hcal_y, bb_tr_vz[0], bb_tr_p[0], bb_tr_px[0], bb_tr_py[0] , bb_tr_pz[0]);		
 		}
+		h_dx_W->Fill( W, dx );
+		h_dx_W2->Fill( W2, dx );
+
+		h_dy_W->Fill( W, dy );
+		h_dy_W2->Fill( W2, dy );
 
 	//If using the scoring method for best cluster we need to sort through the scores and matches and pick a best cluster
 	//This is all based on the original priority_best_cluster.
@@ -1233,6 +1321,14 @@ Double_t ymax_dxdy = 2.5;
 		//Resolve the hadron spots without cuts
 		h_dx->Fill( dx );
 		h_dy->Fill( dy );
+
+		if( dy > -0.5 && dy < 0.5 && W > 1.25 && W < 1.75 ){
+			h_dx_dyW_select_cut_dy00_W15->Fill(dx);		
+		}
+		if( dy > 1.0 && W > 1.25 && W < 1.75 ){
+			h_dx_dyW_select_cut_dy15_W15->Fill(dx);		
+		}
+		
 		h_dxdy->Fill( dy, dx );
 		h_xy->Fill( hcal_y, hcal_x );
 
@@ -1244,11 +1340,20 @@ Double_t ymax_dxdy = 2.5;
 		// } 
 
 		double w2_mult;
+		if( kine == 4 ){
+			w2_mult = 1.5;
+		}
 		if( kine == 8 ){
 			w2_mult = 1.5;
 		}
 		if( kine == 9 ){
 			w2_mult = 2.0;
+		}
+
+		//dx from only higher W regions:
+		if( W > 1.5082720 ){
+			h_dx_large_W_cut->Fill( dx );
+			h_dy_large_W_cut->Fill( dy );
 		}
 
 		// Preliminary HCal projections with single cut on W

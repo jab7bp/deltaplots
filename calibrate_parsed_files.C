@@ -31,8 +31,8 @@ double VectorMean(std::vector<T> const& v){
 	return std::accumulate(v.begin(), v.end(), 0.0)/v.size();
 }
 
-bool single_run = false;
-bool multi_run = true;
+bool single_run = true;
+bool multi_run = false;
 
 bool calc_W = true;
 bool plot_dxdy = true;
@@ -42,15 +42,15 @@ bool use_heavy_cut = false;
 
 //Run info and lookups
 TString run_target = "LD2";
-int kine = 9;
-int sbsfieldscale = 70;
+int kine = 4;
+int sbsfieldscale = 30;
 
 int runnum = lookup_parsed_runnums(run_target.Data(), kine, sbsfieldscale, 0);
 // vector<int> runnum_vec = {13585, 13586, 13587, 13581, 13582, 13583, 13584};
 vector<int> runnum_vec;
 TString runs_string;
 TString experiment = "gmn";
-int pass = 1;
+int pass = 0;
 
 
 double E_beam = lookup_beam_energy_from_kine(kine); //Electron beam energy (electron energy) in GeV.q
@@ -144,7 +144,7 @@ Long64_t Nevents;
 
 //INITIALIZE ALL HISTOGRAMS:
 TH1D *h_Ep, *h_PS, *h_HCal_e, *h_SHPS, *h_W2, *h_W2recon, *h_vert, *h_W, *h_Wrecon;
-TH1D *hin_Ep, *hin_PS, *hin_HCal_e, *hin_SHPS, *hin_W2, *hin_W2recon, *hin_W, *hin_dx;
+TH1D *hin_Ep, *hin_PS, *hin_HCal_e, *hin_SHPS, *hin_W2, *hin_W2recon, *hin_W, *hin_dx, *hin_dy;
 TH1D *hin_tr_p, *hin_tr_p_wcut;
 TH1D *hin_Wrecon, *hin_dxdy_wcut, *hin_dxdy_all;
 TH1D *h_tr_p, *h_tr_p_wcut;
@@ -176,6 +176,10 @@ void calibrate_parsed_files(){
 
 	if( run_target == "LH2" ){ target_int = 0; }
 	if( run_target == "LD2" ){ target_int = 1; }
+
+	if( lookup_parsed_runs_cnt(run_target.Data(), kine, sbsfieldscale) ){
+		cout << "Error looking up parsed runs cnt.... something wrong with target, kine, or sbsfieldscale probably...." << endl;
+	}
 
 	for(int i = 0; i < lookup_parsed_runs_cnt(run_target.Data(), kine, sbsfieldscale); i++){
 		runnum_vec.push_back(lookup_parsed_runnums(run_target.Data(), kine, sbsfieldscale, i));
@@ -245,11 +249,16 @@ void calibrate_parsed_files(){
 	if( kine == 11 ){
 		rootfile_dir = "/volatile/halla/sbs/adr/Rootfiles/gmn_parsed/SBS11/pass1/";
 	}
+	if( kine == 14) {
+		rootfile_dir= "/w/halla-scshelf2102/sbs/sbs-gmn/pass1/SBS14/LD2/rootfiles";
+	}
 	else{
-		rootfile_dir = Form("/volatile/halla/sbs/adr/Rootfiles/gmn_parsed/SBS%i/pass%i/", kine, pass);
+		rootfile_dir = Form("/w/halla-scshelf2102/sbs/sbs-gmn/pass%i/SBS%i/%s/rootfiles", pass, kine, run_target.Data() );
+		// rootfile_dir = Form("/volatile/halla/sbs/adr/Rootfiles/gmn_parsed/SBS%i/pass%i/", kine, pass);
 		// rootfile_dir = "/lustre19/expphy/volatile/halla/sbs/jboyd/analysis_rootfiles/jboyd_parsed";
 	}
 
+	cout << "Rootfile dir: " << rootfile_dir.Data() << endl;
 
 	if( single_run ){
 		cout << "Running in single run mode: " << runnum << endl;
@@ -267,6 +276,10 @@ void calibrate_parsed_files(){
 	}
 	cout << "--------------------------------------" << endl;
 	if( multi_run ){
+		if( runnum_vec.size() == 0 ){
+			cout << "emtpy runnum vec.... " << endl;
+			exit(1);
+		}
 		runnum = runnum_vec[0];
 		cout << "Running in multi-run mode for runs: "  << endl;
 		for(size_t run = 0; run < runnum_vec.size(); run++){
@@ -639,6 +652,7 @@ void calibrate_parsed_files(){
 		hin_tr_p = static_cast<TH1D*>(infile->Get("h_tr_p"));
 		hin_tr_p_wcut = static_cast<TH1D*>(infile->Get("h_tr_p_wcut"));
 		hin_dx = static_cast<TH1D*>(infile->Get("h_dx"));
+		hin_dy = static_cast<TH1D*>(infile->Get("h_dy"));
 	}
 	if( plot_dxdy){
 		hin_dxdy_wcut = static_cast<TH1D*>(infile->Get("h_dxdy_wcut"));
@@ -833,6 +847,14 @@ void calibrate_parsed_files(){
 	if( calc_W ){
 		TCanvas *c_dx = new TCanvas("c_dx", "dx", 600, 500);
 		hin_dx->Draw();
+
+	}
+
+//---------------------------------------
+//---------------- dy -----------------------	
+	if( calc_W ){
+		TCanvas *c_dy = new TCanvas("c_dy", "dy", 600, 500);
+		hin_dy->Draw();
 
 	}
 

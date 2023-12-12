@@ -33,6 +33,7 @@ double VectorMean(std::vector<T> const& v){
 
 bool single_run = false;
 bool multi_run = true;
+bool use_parsed = true;
 
 bool multi_SBS_field = false;
 
@@ -53,12 +54,12 @@ TString experiment = "gmn";
 //Dec 14: Pass 0 = 4, 7, 14
 //25 Juillet 2023, Pass = 8, 9
 
-int pass = 1;
-int kine = 9;
+int pass = 0;
+int kine = 4;
 TString run_target = "LD2";
 int target_int;
 
-int sbsfieldscale = 70;
+int sbsfieldscale = 30;
 double SBS_field = sbsfieldscale/100;
 
 vector<int> sbs_vector;
@@ -253,26 +254,40 @@ void pre_parse_calibration(){
 	cout << "HCal distance: " << HCal_dist << endl;
 	cout << "-----------------------------------" << endl << endl;;
 
-
+	if( !use_parsed){
 	rootfile_dir = Form("/work/halla/sbs/sbs-gmn/pass%i/SBS%i/%s/rootfiles", pass, kine, run_target.Data());
-	// rootfile_dir = "/lustre19/expphy/volatile/halla/sbs/jboyd/analysis_rootfiles/parsed";
+	}
 
+	if( use_parsed ){
+		rootfile_dir = "/lustre19/expphy/volatile/halla/sbs/jboyd/analysis_rootfiles/jboyd_parsed";
+	}
 
 
 	cout << "Running in multi-run mode for " << runnum_vec.size() << " runs: "  << endl;
 
-	for(size_t run = 0; run < runnum_vec.size(); run++){
-		cout << runnum_vec[run] << " ";
-	}
-	cout << endl;
-	cout << "--------------------------------------" << endl;
-	cout << "Adding files to TChain from: " << rootfile_dir.Data() << endl;
-	for(size_t run = 0; run < runnum_vec.size(); run++){
+	if( !use_parsed ){
+		for(size_t run = 0; run < runnum_vec.size(); run++){
+			cout << runnum_vec[run] << " ";
+		}		
 
-		TC->Add(Form("%s/*%i*.root", rootfile_dir.Data(), runnum_vec[run]));
 
+
+		cout << endl;
+		cout << "--------------------------------------" << endl;
+		cout << "Adding files to TChain from: " << rootfile_dir.Data() << endl;
+		for(size_t run = 0; run < runnum_vec.size(); run++){
+
+			TC->Add(Form("%s/*%i*.root", rootfile_dir.Data(), runnum_vec[run]));
+
+		}
+		runs_string = Form("Runs: %i thru %i", *min_element(runnum_vec.begin(), runnum_vec.end()), *max_element(runnum_vec.begin(), runnum_vec.end()));
 	}
-	runs_string = Form("Runs: %i thru %i", *min_element(runnum_vec.begin(), runnum_vec.end()), *max_element(runnum_vec.begin(), runnum_vec.end()));
+
+	if( use_parsed ){
+		cout << "--------------------------------------" << endl;
+		cout << "Adding files to TChain from: " << rootfile_dir.Data() << endl;
+		TC->Add(Form("%s/gmn_parsed_LD2_SBS4_mag30.root", rootfile_dir.Data()));
+	}
 
 	cout << "Finished adding files to TChain. " << endl;
 	cout << "--------------------------------------" << endl;
