@@ -37,9 +37,9 @@ double VectorMean(std::vector<T> const& v){
 	return std::accumulate(v.begin(), v.end(), 0.0)/v.size();
 }
 
-bool single_run = true;
-bool multi_run = false;
-bool use_parsed = true;
+bool single_run = false;
+bool multi_run = true;
+bool use_parsed = false;
 
 bool calc_W = true;
 bool use_heavy_cut = false;
@@ -243,7 +243,7 @@ void dxdy_parsed_files_byKine(){
 	}
 
 	if( kine == 4 ){
-		pass = 0;
+		pass = 2;
 	}
 	if( kine == 8 ){
 		pass = 1;
@@ -272,7 +272,7 @@ void dxdy_parsed_files_byKine(){
 	}
 
 
-	outfile = new TFile(Form("rootfiles/%s_SBS%i_mag%i%s_dxdy%s_elastics_only_bestCluster_%i%s%s_added_Wplots_08_12_2023.root", run_target.Data(), kine, sbsfieldscale, pq_cut_String.Data(), parsed_sel_string.Data(), use_best_cluster,  best_cluster_OnOff_indicated.Data(), ADC_timing_string.Data() ), "RECREATE");		
+	outfile = new TFile(Form("rootfiles/%s_SBS%i_mag%i%s_dxdy%s_elastics_only_bestCluster_%i%s%s_added_Wplots_13_12_2023.root", run_target.Data(), kine, sbsfieldscale, pq_cut_String.Data(), parsed_sel_string.Data(), use_best_cluster,  best_cluster_OnOff_indicated.Data(), ADC_timing_string.Data() ), "RECREATE");		
 
 Int_t nBins_x_dxdy = 300;
 Double_t xmin_dxdy = -1.5;
@@ -367,8 +367,8 @@ Double_t ymax_dxdy = 2.5;
 	h_hcal_clusblk_ADC_time = new TH1D("h_hcal_clusblk_ADC_time", Form("ADC time of the highest energy block in the largest cluster - SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 300, -100, 200);
 	h_hcal_clusblk_ADC_time_cut = new TH1D("h_hcal_clusblk_ADC_time_cut", Form("ADC time of the highest energy block in the largest cluster (Cut window)- SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 300, -100, 200);
 
-	h_hcal_clusblk_ADC_time_diff = new TH1D("h_hcal_clusblk_ADC_time_diff", Form("HCal ADC Time - BBCal Shower ADC Time - SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 100, 0, 100);
-	h_hcal_clusblk_ADC_time_diff_cut = new TH1D("h_hcal_clusblk_ADC_time_diff_cut", Form("HCal ADC Time - BBCal Shower ADC Time (cut window)- SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 100, 0, 100);
+	h_hcal_clusblk_ADC_time_diff = new TH1D("h_hcal_clusblk_ADC_time_diff", Form("HCal ADC Time - BBCal Shower ADC Time - SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 200, -100, 100);
+	h_hcal_clusblk_ADC_time_diff_cut = new TH1D("h_hcal_clusblk_ADC_time_diff_cut", Form("HCal ADC Time - BBCal Shower ADC Time (cut window)- SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 200, -100, 100);
 
 	h_bb_sh_atimeblk = new TH1D("h_bb_sh_atimeblk", Form("ADC Shower Timing for BB Block - SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 300, -100, 200);
 	
@@ -408,7 +408,8 @@ Double_t ymax_dxdy = 2.5;
 	cout << "Pulling experimental, fit, and other variables..." << endl;
 
 	if( kine == 4 ){
-		hcal_height = -0.312479; // Height of HCal above beamline
+		hcal_height = 0.0;
+		// hcal_height = -0.312479; // Height of HCal above beamline
 		//offset: -1.37521e-01
 	}
 	if( kine == 8 ){
@@ -511,7 +512,11 @@ Double_t ymax_dxdy = 2.5;
 		rootfile_dir = "/w/halla-scshelf2102/sbs/sbs-gmn/pass1/SBS14/LD2/rootfiles";
 	}
 	if( kine == 4 ){
-		rootfile_dir = Form("/volatile/halla/sbs/adr/Rootfiles/gmn_parsed/SBS%i/pass%i/", kine, pass);
+		// rootfile_dir = Form("/volatile/halla/sbs/adr/Rootfiles/gmn_parsed/SBS%i/pass%i/", kine, pass);
+		if( multi_run){
+			rootfile_dir = "/lustre19/expphy/volatile/halla/sbs/sbs-gmn";		
+		}
+
 	}
 	if( kine == 8 ){
  		if( multi_run ){
@@ -545,6 +550,9 @@ Double_t ymax_dxdy = 2.5;
   			rootfile_dir = "/lustre19/expphy/volatile/halla/sbs/jboyd/analysis_rootfiles/jboyd_parsed";			
  		}
 
+ 	}
+ 	if( pass == 2 ){
+ 		rootfile_dir = Form("/lustre19/expphy/volatile/halla/sbs/sbs-gmn/GMN_REPLAYS/pass2/QA_FINAL/SBS%i/%s/rootfiles", kine, run_target.Data());
  	}
 
  	cout << endl;
@@ -583,10 +591,13 @@ Double_t ymax_dxdy = 2.5;
 		cout << endl;
 		cout << "--------------------------------------" << endl;
 		cout << "Adding files to TChain from: " << rootfile_dir.Data() << endl;
-		// for(size_t run = 0; run < runnum_vec.size(); run++){
-		// 	TC->Add(Form("%s/*%i*.root", rootfile_dir.Data(), runnum_vec[run]));
+		for(size_t run = 0; run < runnum_vec.size(); run++){
+			TC->Add(Form("%s/*%i*.root", rootfile_dir.Data(), runnum_vec[run]));
+		}
+
+		// else{
+		// 	TC->Add(Form("%s/*.root", rootfile_dir.Data()));
 		// }
-		TC->Add(Form("%s/*.root", rootfile_dir.Data()));
 	}
 
 	if( use_parsed ){
@@ -736,8 +747,8 @@ Double_t ymax_dxdy = 2.5;
 	// hcal_x_fmax = 1.285;
 
 	if( kine == 4 ){
-		Ep_sig_mult = 3.0;
-		SH_PS_sig_mult = 3.0;		
+		Ep_sig_mult = 1.5;
+		SH_PS_sig_mult = 3.5;		
 	}
 
 	if( kine == 8 ){
@@ -763,7 +774,7 @@ Double_t ymax_dxdy = 2.5;
 				"bb.tr.n==1",
 				"bb.ps.e>0.15",
 				// Form("bb.tr.p[0]>%f", 1.10*lookup_parsed_cut(run_target.Data(), kine, sbsfieldscale, "SH_PS_mean") ),
-				// "sbs.hcal.e>0.05",
+				"sbs.hcal.e>0.05",
 				// // "((abs(((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))))-0.98)<0.15",
 				// "bb.ps.e+bb.sh.e>2.5"; -->bb.tr.p[0]
 				// // Form("bb.ps.e>%f", lookup_parsed_cut(run_target, kine, sbsfieldscale, "PS_min")),
@@ -771,7 +782,7 @@ Double_t ymax_dxdy = 2.5;
 				// // // // Form("((abs(((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))))-%f)<%f", lookup_parsed_cut(runnum, "Ep"), lookup_parsed_cut(runnum, "Ep_sigma")),
 				// Form("sbs.hcal.e>%f",lookup_parsed_cut(run_target, kine, sbsfieldscale, "HCal_clus_e_cut")),
 				Form("(bb.sh.e+bb.ps.e)>%f", SH_PS_min),
-				Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)", 0.0)
+				Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)", Ep_min)
 			};
 	}
 	if( kine == 14 || kine == 11 ){
@@ -1228,6 +1239,7 @@ Double_t ymax_dxdy = 2.5;
 				// bestClusterSelectionHcalE_CoinTimingMaxE_EuclideanScoring( hcal_e_ADC_coin_passed, hcal_e_index_ADC_coin_passed, ADC_diff_time_coin_passed, best_cluster_OrigIndex_Energy_Index_Timing_Score );
 			}
 		}
+		else{ continue; }
 
  		if( hcal_cluster_minimize == "coin_time_and_maxE" ){
  			int best_energy_index = -1;
