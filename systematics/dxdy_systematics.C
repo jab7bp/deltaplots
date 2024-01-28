@@ -249,16 +249,6 @@ void dxdy_systematics(int kine, int sbsfieldscale, TString run_target, TString s
 
 	systematic_varVal_str = syst_vars.systematic_varVal_str;
 
-	if( kine == 4 ){
-		w2_mult = 1.5;
-	}
-	if( kine == 8 ){
-		w2_mult = 1.5;
-	}
-	if( kine == 9 ){
-		w2_mult = 1.5;
-	}
-
 	auto total_time_start = high_resolution_clock::now();
 	TStopwatch *StopWatch = new TStopwatch();
 
@@ -504,6 +494,9 @@ Double_t ymax_dxdy = 2.5;
 	}
 
 	if( systematic_var_str == "inv_mass_fixed_mean_vary_sigma_mult"  ){
+		cout << "oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo" << endl;
+		cout << "oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo" << endl;
+		cout << "Standard w2_mult: " << w2_mult_min << endl;
 		w2_mult_min = syst_vars.w2_mult_min;
 		w2_mult_max = syst_vars.w2_mult_max;
 
@@ -512,20 +505,28 @@ Double_t ymax_dxdy = 2.5;
 
 		cout << "-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*" << endl;
 		cout << "w2_mult_min: " << w2_mult_min << " ---- w2_mult_max: " << w2_mult_max << endl << endl;
+		cout << "oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo" << endl;
 	}
 
 	if( systematic_var_str == "inv_mass_fixed_moving_range" || systematic_var_str == "inv_mass_fixed_min_vary_max"){
+		cout << "oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo" << endl;
+		cout << "oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo" << endl;
+		cout << "Inv Mass min: " << syst_vars.invMass_min << endl;
+		cout << "Inv Mass max: " << syst_vars.invMass_max << endl;
 		systematic_invMass_min = syst_vars.invMass_min;
 		systematic_invMass_max = syst_vars.invMass_max;
 		W_cut_lower_bound = systematic_invMass_min;
 		W_cut_upper_bound = systematic_invMass_max;
+		cout << "oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo" << endl;
 	}
 	else{ //No systematic varying of W cut
+		cout << "oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo" << endl;
 		cout << "Using standard W cuts (non systematic) " << endl;
 		cout << "Inv mass type: " << Wcut_type.Data() << endl;
 		cout << "w2_mult_min: " << w2_mult_min << " ---- w2_mult_max: " << w2_mult_max << endl;
 		W_cut_lower_bound = (Wcut_select_mean - w2_mult*Wcut_select_sigma );
 		W_cut_upper_bound = (Wcut_select_mean + w2_mult*Wcut_select_sigma );
+		cout << "oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo" << endl;
 	}
 
 	cout << endl;
@@ -651,7 +652,12 @@ Double_t ymax_dxdy = 2.5;
 
  	}
  	if( pass == 2 ){
- 		rootfile_dir = Form("/lustre19/expphy/volatile/halla/sbs/sbs-gmn/GMN_REPLAYS/pass2/QA_FINAL/SBS%i/%s/rootfiles", kine, run_target.Data());
+ 		if( use_parsed ){
+ 			rootfile_dir = "/lustre19/expphy/volatile/halla/sbs/jboyd/analysis_rootfiles/jboyd_parsed/jboyd_parsed";
+ 		}
+ 		else{
+  			rootfile_dir = Form("/lustre19/expphy/volatile/halla/sbs/sbs-gmn/GMN_REPLAYS/pass2/QA_FINAL/SBS%i/%s/rootfiles", kine, run_target.Data());
+ 		}
  	}
 
  	cout << endl;
@@ -897,8 +903,6 @@ Double_t ymax_dxdy = 2.5;
 		gem_track_nhits_min = 3;
 		fcut_mult = 2;
 	}
-
-
 
 	if( systematic_var_str == "SH_PS_sigma_mult"){
 		cout << "oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo" << endl;
