@@ -37,14 +37,11 @@ double VectorMean(std::vector<T> const& v){
 	return std::accumulate(v.begin(), v.end(), 0.0)/v.size();
 }
 
-bool single_run = false;
+bool single_run = true;
 bool multi_run;
-bool use_parsed = false;
+bool use_parsed = true;
 
 bool calc_W = true;
-TString Wcut_type = "W";
-double Wcut_select, Wcut_select_mean, Wcut_select_sigma;
-
 bool use_heavy_cut = false;
 
 bool correct_beam_energy = true;
@@ -114,6 +111,7 @@ TString rootfile_dir;
 
 TFile *outfile;
 TChain *TC = new TChain("T");
+
 vector<TString> master_cut_vec;
 TString master_cut_string;
 
@@ -170,6 +168,19 @@ double bb_sh_atimeblk;
 double hcal_clus_ADCtime_diff = 0.0;
 double bb_tr_n, bb_ps_x, bb_ps_y, bb_ps_e, bb_sh_x, bb_sh_y, bb_sh_e;
 
+//OUTPUT TREE VARIABLES
+Double_t output_W, output_W2;
+Double_t output_dx, output_dy;
+Int_t wcut_applied, fcut_applied, wcut_fcut_applied;
+Double_t output_dx_wcut, output_dx_wcut_fcut, output_dy_wcut, output_dy_wcut_fcut;
+
+// Double_t output_dx_p_mean, output_dx_p_sigma;
+// Double_t output_dx_n_mean, output_dx_n_sigma;
+// Double_t output_dy_p_mean, output_dy_p_sigma;
+// Double_t output_W_mean, output_W_sigma;
+// Double_t output_W2_mean, output_W2_sigma;
+// Double_t output_ADC_time_min, output_ADC_time_max, output_ADC_time_mean;
+// Double_t output_ADC_diff_time_min, output_ADC_diff_time_max;
 
 Double_t TDCT_id[kNtdc], TDCT_tdc[kNtdc], hodo_tmean[kNtdc]; 
 Int_t TDCTndata;
@@ -202,9 +213,12 @@ TH2D *h_dxdy_wcut_2multfcut, *h_dxdy_wcut_15multfcut;
 TH2D *h_xy, *h_xy_cut, *h_xy_fcut, *h_xy_cut_p, *h_xy_cut_n, *h_PAngleCorr_theta, *h_PAngleCorr_phi;
 
 TH2D *h_HCal_xy_fcut, *h_HCal_xy_std, *h_HCal_posHCalXY;
-TH2D *h_HCal_xy_expected_std, *h_HCal_xy_expected_fcut;
 
 TH1D *h_dx_dyW_select_cut_dy15_W15, *h_dx_dyW_select_cut_dy00_W15;
+
+TH1D *h_dx_p_mean, *h_dx_p_sigma, *h_dx_n_mean, *h_dx_n_sigma, *h_dy_p_mean, *h_dy_p_sigma;
+TH1D *h_W_mean, *h_W_sigma, *h_W2_mean, *h_W2_sigma;
+TH1D *h_ADC_time_min, *h_ADC_time_max, *h_ADC_time_mean, *h_ADC_diff_time_min, *h_ADC_diff_time_max;
 
 double n_integral, p_integral, n_center, n_sigma, p_center, p_sigma;
 double p_Beam, E_loss_outgoing;
@@ -227,7 +241,7 @@ int hcal_e_ADC_passed_maxElementIndex;
 double fiducial_active_area_xmax, fiducial_active_area_xmin, fiducial_active_area_ymax, fiducial_active_area_ymin;
 
 
-void dxdy_parsed_files_byKine(){
+void make_dxdy_variables_rootfile(){
 
 	auto total_time_start = high_resolution_clock::now();
 	TStopwatch *StopWatch = new TStopwatch();
@@ -278,149 +292,70 @@ void dxdy_parsed_files_byKine(){
 		best_cluster_OnOff_indicated = Form("_%s", hcal_cluster_minimize.Data() );
 	}
 
-	outfile = new TFile(Form("/w/halla-scshelf2102/sbs/jboyd/analysis/gmn/deltaplots/rootfiles/%s_SBS%i_mag%i_dxdy%s_elastics_NoMasterCutVec_27_01_2024.root", run_target.Data(), kine, sbsfieldscale, parsed_sel_string.Data() ), "RECREATE");
-	// outfile = new TFile(Form("/w/halla-scshelf2102/sbs/jboyd/analysis/gmn/deltaplots/systematics/systematics_rootfiles/SBS4/dx_sections/%s_SBS%i_mag%i_dxdy%s_elastics_only_bestCluster_%i%s%s_W2cuts_20_01_2024.root", run_target.Data(), kine, sbsfieldscale, parsed_sel_string.Data(), use_best_cluster,  best_cluster_OnOff_indicated.Data(), ADC_timing_string.Data() ), "RECREATE");		
 
-	cout << "--------------------------------------------------------" << endl;
-	cout << "--------------------------------------------------------" << endl;
-	cout << "Outfile: " << outfile->GetName() << endl;
-	cout << "--------------------------------------------------------" << endl;
-	cout << "--------------------------------------------------------" << endl;
+	outfile = new TFile(Form("/w/halla-scshelf2102/sbs/jboyd/analysis/gmn/deltaplots/rootfiles/%s_SBS%i_mag%i_dxdy%s_variables_oldParsed_23_01_2024.root", run_target.Data(), kine, sbsfieldscale, parsed_sel_string.Data() ), "RECREATE");		
 
-Int_t nBins_x_dxdy = 300;
-Double_t xmin_dxdy = -1.5;
-Double_t xmax_dxdy = 1.5;
+	TTree *outputVarTree = new TTree("T_dxdy", "dxdy variable");
 
-Int_t nBins_y_dxdy = 500;
-Double_t ymin_dxdy = -2.5;
-Double_t ymax_dxdy = 2.5;
 
-	h_E_eloss = new TH1D("E_eloss", Form("Scattered Electron Energy Loss in Target - SBS%i %i, %s", kine, sbsfieldscale, run_target.Data()), 500, 0.0, (0.1)*E_beam);
-	h_E_ecorr_vs_vert = new TH2D("h_E_ecorr_vs_vert", Form("Corrected Beam Energy vs Vertex - SBS%i %i, %s; E_{e} (GeV); Z_{vertex} (m)", kine, sbsfieldscale, run_target.Data()), 250, -0.125, 0.125, 500, 0, 0.001);
+//------OUTPUT TREE
+// Set BRANCH ADDRESSES
+	// HCal
+	outputVarTree->Branch( "dx", &output_dx, "dx/D" );
+	outputVarTree->Branch( "dx_wcut", &output_dx_wcut, "dx_wcut/D" );
+	outputVarTree->Branch( "dx_wcut_fcut", &output_dx_wcut_fcut, "dx_wcut_fcut/D" );
+	outputVarTree->Branch( "dy", &output_dy, "dy/D" );
+	outputVarTree->Branch( "dy_wcut", &output_dy_wcut, "dy_wcut" );
+	outputVarTree->Branch( "dy_wcut_fcut", &output_dy_wcut_fcut, "dy_wcut_fcut/D" );
+	outputVarTree->Branch( "W", &output_W, "W/D" );
+	outputVarTree->Branch( "W2", &output_W2, "W2/D" );
+	outputVarTree->Branch( "wcut_applied", &wcut_applied, "wcut_applied/I" );
+	outputVarTree->Branch( "fcut_applied", &fcut_applied, "fcut_applied/I");
+	outputVarTree->Branch( "wcut_fcut_applied", &wcut_fcut_applied, "wcut_fcut_applied/I" );
+
+	Int_t nBins_x_dxdy = 300;
+	Double_t xmin_dxdy = -1.5;
+	Double_t xmax_dxdy = 1.5;
+
+	Int_t nBins_y_dxdy = 500;
+	Double_t ymin_dxdy = -2.5;
+	Double_t ymax_dxdy = 2.5;
+
 	h_Q2 = new TH1D("h_Q2", Form("Momentum Transfer Q^2 - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 600, 0, 6.0);
-	h_E_ep = new TH1D("h_E_ep", Form("Scattered Electron Energy - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 1.5*E_beam);
-	h_E_pp = new TH1D("h_E_pp", Form("Scattered Proton Energy - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 1.5*E_beam);
+
 	h_W = new TH1D("h_W", Form("Invariant Mass W - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 300, 0.0, 3.0);
-	h_W_cut = new TH1D("h_W_cut", Form("Invariant Mass W (Coin & Vert Cuts) - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 300, 0.0, 3.0);
-	h_W_fcut = new TH1D("h_W_fcut", Form("Invariant Mass W (Fiduc. Cuts) - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 300, 0.0, 3.0);
 	h_W2 = new TH1D("h_W2", Form("Invariant Mass Squared W^{2} - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 600, 0.0, 6.0);
 	h_W2recon = new TH1D("h_W2recon", Form("Invariant Mass Squared W^{2} Recon - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 300, 0.0, 3.0);
-	h_KE_p = new TH1D("h_KE_p", Form("Scattered Proton Kinetic Energy - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 1.5*E_beam);
-	h_tr_p = new TH1D("h_tr_p", Form("Scattered electron track momentum - SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 5.0);
-	h_tr_p_wcut = new TH1D("h_tr_p_wcut", Form("Scattered electron track momentum (with W2 cut)- SBS%i %i, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 5.0);
-	h_HCal_e = new TH1D("h_HCal_e", Form("HCal Clus. E (HCal_E > 0) - SBS%i = %i%%, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0, 1.0);
-
-	h_q_vec = new TH1D("h_q_vec", Form("q vector - SBS%i = %i%%, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0, 5.0);
-	h_dx_large_W_cut = new TH1D("h_dx_large_W_cut", Form("dx with only W > 1.5082720 - SBS%i %i, %s; x_{HCal} - x_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
-	h_dy_large_W_cut = new TH1D("h_dy_large_W_cut",Form("dy with only W > 1.5082720 - SBS%i %i, %s; y_{HCal} - y_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy);
-
-	h_dx_W = new TH2D("h_dx_W", Form("dx vs W without any W cuts - SBS%i mag%i %s; W (GeV); dx, x_{HCal} - x_{exp} (m)", kine, sbsfieldscale, run_target.Data()), 300, 0.0, 3.0, 500, -2.5, 2.5);
-	h_dx_W2 = new TH2D("h_dx_W2", Form("dx vs W^{2} without any W cuts - SBS%i mag%i %s; W^{2} (GeV); dx, x_{HCal} - x_{exp} (m)", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 5.0, 500, -2.5, 2.5);
-
-	h_dy_W = new TH2D("h_dy_W", Form("dy vs W without any W cuts - SBS%i mag%i %s; W (GeV); dy, y_{HCal} - y_{exp} (m)", kine, sbsfieldscale, run_target.Data()), 300, 0.0, 3.0, nBins_x_dxdy, xmin_dxdy, xmax_dxdy);
-	h_dy_W2 = new TH2D("h_dy_W2", Form("dy vs W^{2} without any W cuts - SBS%i mag%i %s; W^{2} (GeV); dy, y_{HCal} - y_{exp} (m)", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 5.0, nBins_x_dxdy, xmin_dxdy, xmax_dxdy);
-
-	h_p_miss = new TH1D("h_p_miss", Form("Missing momentum, p_{miss}, SBS%i mag%i %s; p_{miss} (GeV)", kine, sbsfieldscale, run_target.Data()), 500, -1.0, 1.0);
-	h_p_miss_pos = new TH1D("h_p_miss_pos", Form("Missing momentum, p_{miss}, positive convention, SBS%i mag%i %s; p_{miss, +} (GeV)", kine, sbsfieldscale, run_target.Data()), 500, -1.0, 1.0);
-	h_p_miss_neg = new TH1D("h_p_miss_neg", Form("Missing momentum, p_{miss}, negative convetion, SBS%i mag%i %s; p_{miss, -} (GeV)", kine, sbsfieldscale, run_target.Data()), 500, -1.0, 1.0);
-
-	h_p_nucleon = new TH1D("h_p_nucleon", Form("Scattered nucleon momentum - SBS%i mag%i %s; p_{Nucleon} (GeV)", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 5.0);
-	h_p_proton = new TH1D("h_p_proton", Form("Scattered proton momentum - SBS%i mag%i %s; p_{proton} (GeV)", kine, sbsfieldscale, run_target.Data()), 500, 0.0, 5.0);
-
-	h_Ep = new TH1D("h_Ep", Form("E/p - SBS%i = %i%%, %s", kine, sbsfieldscale, run_target.Data()), 200, 0, 2);
-	h_Ep_wcut = new TH1D("h_Ep_wcut", Form("E/p (wcut)- SBS%i = %i%%, %s", kine, sbsfieldscale, run_target.Data()), 200, 0, 2);	
-	h_PS = new TH1D("h_PS", Form("Pre-Shower Clus. E - SBS%i = %i%%, %s; GeV", kine, sbsfieldscale, run_target.Data()), 300, 0, 3);
-	h_HCal_e = new TH1D("h_HCal_e", Form("HCal E (hcal_e)- SBS%i = %i%%, %s; GeV", kine, sbsfieldscale, run_target.Data()), 200, 0, 0.4);
-	h_hcal_clus_e_sorted = new TH1D("h_hcal_clus_e_sorted", Form("HCal Clus E Sorted in Desc. Order of E (hcal_e_sorted)- SBS%i = %i%%, %s; GeV", kine, sbsfieldscale, run_target.Data()), 200, 0, 0.4);
-	h_hcal_clus_e = new TH1D("h_hcal_clus_e", Form("HCal Clus. E (hcal_clus_e) - SBS%i = %i%%, %s; GeV", kine, sbsfieldscale, run_target.Data()), 200, 0, 0.4);
-	h2_hcal_e_V_clus_e = new TH2D("h2_hcal_e_V_clus_e", "h2_hcal_e_V_clus_e", 200, 0.0, 0.4, 200, 0.0, 0.4);
-	h2_hcal_e_V_clus_e_sorted = new TH2D("h2_hcal_e_V_clus_e_sorted", "h2_hcal_e_V_clus_e_sorted", 200, 0.0, 0.4, 200, 0.0, 0.4);
-	h2_hcal_clus_e_V_hcal_clus_e_sorted = new TH2D("h2_hcal_clus_e_V_hcal_clus_e_sorted", "h2_hcal_clus_e_V_hcal_clus_e_sorted", 200, 0.0, 0.4, 200, 0.0, 0.4);
-	h_hcal_clus_e_indexed = new TH1D("h_hcal_clus_e_indexed", "h_hcal_clus_e_indexed", 10, 0, 10);
-	h_hcal_clus_e_sorted_indexed = new TH1D("h_hcal_clus_e_sorted_indexed", "h_hcal_clus_e_sorted_indexed", 10, 0, 10);
-
-	h_SHPS = new TH1D("h_SHPS", Form("SH + PS Clus. E - SBS%i = %i%%, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0, 5);
-	h_SHPS_wcut = new TH1D("h_SHPS_wcut", Form("SH + PS Clus. E (wcut)- SBS%i = %i%%, %s; GeV", kine, sbsfieldscale, run_target.Data()), 500, 0, 5);
 
 	h_dx = new TH1D("h_dx",Form("dx (NO CUTS) - SBS%i %i, %s; x_{HCal} - x_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
-	h_dx_cut = new TH1D("h_dx_cut",Form("dx (Basic CUTS) - SBS%i %i, %s; x_{HCal} - x_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
 	h_dx_wcut = new TH1D("h_dx_wcut",Form("dx (W cut) - SBS%i %i, %s; x_{HCal} - x_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
 	h_dx_fcut = new TH1D("h_dx_fcut",Form("dx (f cut) - SBS%i %i, %s; x_{HCal} - x_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
 	h_dx_wcut_fcut = new TH1D("h_dx_wcut_fcut",Form("dx (W & Fiduc. Cuts) - SBS%i %i, %s; x_{HCal} - x_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
 
-	h_dx_dyW_select_cut_dy00_W15 = new TH1D("h_dx_dyW_select_cut_dy00_W15", Form("dx for select dy vs W region: dy = -0.5 - 0.5, W = 1.25 - 1.75 - SBS%i mag%i %s; x_{HCal} - x_{exp} (m)", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
-	h_dx_dyW_select_cut_dy15_W15 = new TH1D("h_dx_dyW_select_cut_dy15_W15", Form("dx for select dy vs W region: dy = 1 - 1.5, W = 1.25 - 1.75 - SBS%i mag%i %s; x_{HCal} - x_{exp} (m)", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
-
-	h_dy = new TH1D("h_dy",Form("dy (NO CUTS) - SBS%i %i, %s; y_{HCal} - y_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy);
-	h_dy_cut = new TH1D("h_dy_cut",Form("dy (Basic Cuts) - SBS%i %i, %s; y_{HCal} - y_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy);  
-	h_dy_wcut = new TH1D("h_dy_wcut",Form("dy (W Cuts) - SBS%i %i, %s; y_{HCal} - y_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy);
-	h_dy_wcut_fcut = new TH1D("h_dy_wcut_fcut",Form("dy (W & Fiduc. Cuts) - SBS%i %i, %s; y_{HCal} - y_{exp} (m);", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy);    
+	h_dy = new TH1D("h_dy",Form("dy (NO CUTS) - SBS%i %i, %s; y_{HCal} - y_{exp} (m);", kine, sbsfieldscale, run_target.Data()), 500, -1.25,1.25);
+	h_dy_wcut = new TH1D("h_dy_wcut",Form("dy (W Cuts) - SBS%i %i, %s; y_{HCal} - y_{exp} (m);", kine, sbsfieldscale, run_target.Data()), 500, -1.25,1.25);
+	h_dy_wcut_fcut = new TH1D("h_dy_wcut_fcut",Form("dy (W & Fiduc. Cuts) - SBS%i %i, %s; y_{HCal} - y_{exp} (m);", kine, sbsfieldscale, run_target.Data()), 500, -1.25,1.25);    
 
 	h_dxdy = new TH2D("h_dxdy", Form("Hadron Spot(s) on HCal (NO CUTS) - SBS%i %i, %s;y_{HCal}-y_{expect} (m); x_{HCal}-x_{expect} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy );
 	h_dxdy_wcut = new TH2D("h_dxdy_wcut", Form("Hadron Spot(s) on HCal (W cut) - SBS%i %i, %s;y_{HCal}-y_{expect} (m); x_{HCal}-x_{expect} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy );
+	h_dxdy_fcut = new TH2D("h_dxdy_fcut", Form("Hadron Spot(s) on HCal (f cut) - SBS%i %i, %s;y_{HCal}-y_{expect} (m); x_{HCal}-x_{expect} (m)", kine, sbsfieldscale, run_target.Data()), 250, -1.25, 1.25, 250, -2.5, 2.5 );
 	h_dxdy_wcut_fcut = new TH2D("h_dxdy_wcut_fcut", Form("Hadron Spot(s) on HCal (W & Fiduc. Cuts) - SBS%i %i, %s;y_{HCal}-y_{expect} (m); x_{HCal}-x_{expect} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy );
-	h_dxdy_wcut_2multfcut = new TH2D("h_dxdy_wcut_2multfcut", Form("Hadron Spot(s) on HCal (W & 2*Mult_Fiduc. Cuts) - SBS%i %i, %s;y_{HCal}-y_{expect} (m); x_{HCal}-x_{expect} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy );
-	h_dxdy_wcut_15multfcut = new TH2D("h_dxdy_wcut_15multfcut", Form("Hadron Spot(s) on HCal (W & 1.5*Mult_Fiduc. Cuts) - SBS%i %i, %s;y_{HCal}-y_{expect} (m); x_{HCal}-x_{expect} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy );
-	h_dxdy_wcut_fcut_ADCtiming = new TH2D("h_dxdy_wcut_fcut_ADCtiming", Form("Hadron Spot(s) on HCal (W, Fiduc. & ADC timing Cuts) - SBS%i %i, %s;y_{HCal}-y_{expect} (m); x_{HCal}-x_{expect} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy );
-	h_dxdy_wcut_fcut_AntiADCtiming = new TH2D("h_dxdy_wcut_fcut_AntiADCtiming", Form("Hadron Spot(s) on HCal (W, Fiduc. & Anti-ADC timing Cuts) - SBS%i %i, %s;y_{HCal}-y_{expect} (m); x_{HCal}-x_{expect} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy );
 
-	h_dxdy_cut = new TH2D("h_dxdy_cut", Form("Hadron Spot(s) on HCal (Basic cuts) - SBS%i %i, %s;y_{HCal}-y_{expect} (m); x_{HCal}-x_{expect} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy );
-
-	h_dxdy_ncut = new TH2D("h_dxdy_ncut", Form("Hadron Spot(s) on HCal (n cut) - SBS%i %i, %s;y_{HCal}-y_{expect} (m); x_{HCal}-x_{expect} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
-	h_dxdy_pcut = new TH2D("h_dxdy_pcut", Form("Hadron Spot(s) on HCal (p cut) - SBS%i %i, %s;y_{HCal}-y_{expect} (m); x_{HCal}-x_{expect} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy );
-	h_dxdy_fcut = new TH2D("h_dxdy_fcut", Form("Hadron Spot(s) on HCal (f cut) - SBS%i %i, %s;y_{HCal}-y_{expect} (m); x_{HCal}-x_{expect} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy );
-	h_xy = new TH2D("h_xy",Form("HCal Hadron Spots (x, y) (NO CUTS) - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()),12,-0.9,0.9,24,-2.165,1.435);
-	h_xy_cut = new TH2D("h_xy_cut", Form("HCal Hadron Spots (x, y) (BASIC CUTS) - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()),12,-0.9,0.9,24,-2.165,1.435);
-	h_xy_fcut = new TH2D("h_xy_fcut", Form("HCal Hadron Spots (x, y) (Fiduc. CUTS) - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()),12,-0.9,0.9,24,-2.165,1.435);
-	h_xy_cut_p = new TH2D("h_xy_cut_p", Form("HCal Hadron Spots (x, y) (p CUT) - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()),12,-0.9,0.9,24,-2.165,1.435);
-	h_xy_cut_n = new TH2D("h_xy_cut_n", Form("HCal Hadron Spots (x, y) (n CUT) - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()),12,-0.9,0.9,24,-2.165,1.435);
-
-	h_HCal_xy_std = new TH2D("h_HCal_xy_std", Form("HCal x and y, raw - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
-	h_HCal_xy_fcut = new TH2D("h_HCal_xy_fcut", Form("HCal x and y, Fcut - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
-	h_HCal_xy_expected_std = new TH2D("h_expected_xy_std", Form("Expected HCal x and y, raw - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
-	h_HCal_xy_expected_fcut = new TH2D("h_expected_xy_fcut", Form("xpected HCal x and y, Fcut - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()), nBins_x_dxdy, xmin_dxdy, xmax_dxdy, nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
-
-
-	h_hcal_clusblk_ADC_time = new TH1D("h_hcal_clusblk_ADC_time", Form("ADC time of the highest energy block in the largest cluster - SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 300, -100, 200);
-	h_hcal_clusblk_ADC_time_cut = new TH1D("h_hcal_clusblk_ADC_time_cut", Form("ADC time of the highest energy block in the largest cluster (Cut window)- SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 300, -100, 200);
-
-	h_hcal_clusblk_ADC_time_diff = new TH1D("h_hcal_clusblk_ADC_time_diff", Form("HCal ADC Time - BBCal Shower ADC Time - SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 200, -100, 100);
-	h_hcal_clusblk_ADC_time_diff_cut = new TH1D("h_hcal_clusblk_ADC_time_diff_cut", Form("HCal ADC Time - BBCal Shower ADC Time (cut window)- SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 200, -100, 100);
-
-	h_bb_sh_atimeblk = new TH1D("h_bb_sh_atimeblk", Form("ADC Shower Timing for BB Block - SBS%i %i, %s; ADC Time (ns)", kine, sbsfieldscale, run_target.Data()), 300, -100, 200);
-	
-	h_theta_pq_n = new TH1D("h_theta_pq_n", Form("Theta pq for neutron - SBS%i %i, %s; theta_pq_n (rad);", kine, sbsfieldscale, run_target.Data()), 600, 0.0, 0.60);
-	h_theta_pq_p = new TH1D("h_theta_pq_p", Form("Theta pq for proton - SBS%i %i, %s; theta_pq_p (rad);", kine, sbsfieldscale, run_target.Data()), 600, 0.0, 0.60);
-
-	h_theta_pq_n_cut = new TH1D("h_theta_pq_n_cut", Form("dx for theta_pq neutron (events cut by theta_pq_cut) - SBS%i %i, %s; theta_pq_n (rad);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
-	h_theta_pq_n_anticut = new TH1D("h_theta_pq_n_anticut", Form("dx for theta_pq neutron (events cut by theta_pq_anticut) - SBS%i %i, %s; theta_pq_n (rad);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
-	h_theta_pq_p_cut = new TH1D("h_theta_pq_p_cut", Form("dx for theta_pq proton (events cut by theta_pq_cut) - SBS%i %i, %s; theta_pq_p (rad);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
-	h_theta_pq_p_anticut = new TH1D("h_theta_pq_p_anticut", Form("dx for theta_pq proton (events cut by theta_pq_anticut) - SBS%i %i, %s; theta_pq_p (rad);", kine, sbsfieldscale, run_target.Data()), nBins_y_dxdy, ymin_dxdy, ymax_dxdy);
-
-	h_PAngleCorr_theta = new TH2D( "h_PAngCorr_theta",Form("BB theta vs HCal theta - SBS%i %i, %s", kine, sbsfieldscale, run_target.Data()), 200, 0.55, 0.75, 300, 0.35, 0.65 );
-	h_PAngleCorr_phi = new TH2D( "h_PAngCorr_phi",Form("BB phi vs HCal phi - SBS%i %i, %s", kine, sbsfieldscale, run_target.Data()), 500, -0.4, 0.1, 500, 2.7, 3.2 );
-	h_vz_cut = new TH1D("h_vz_cut",Form("BB phi vs HCal phi - SBS%i %i, %s; vertex z (m);", kine, sbsfieldscale, run_target.Data()), 250,-0.125,0.125);
-
-	h_Nevents = new TH1D("h_Nevents", "Number of passing events", 1, 0, 1);
-	h_eclus_sel = new TH1D("h_eclus_sel", "Index of hcal cluster selected", 10, 0, 10);
-
-	// h_HCal_posHCalXY = new TH2D("h_HCal_posHCalXY", Form("HCal Boundary as defined in by posHCal Xi, Xf, Yi, Yf - SBS%i %i, %s;y_{HCal} (m); x_{HCal} (m)", kine, sbsfieldscale, run_target.Data()), 800, -2.0, 2.0, 1200, -3.0, 3.0);
-	// h_HCal_posHCalXY->Draw();
-	// TLine *tl_posHCal_left = new TLine( posHCalYi, posHCalXi, posHCalYi, posHCalXf );
-	// TLine *tl_posHCal_right = new TLine( posHCalYf, posHCalXi, posHCalYf, posHCalXf );
-	// TLine *tl_posHCal_top = new TLine( posHCalYi, posHCalXf, posHCalYf, posHCalXf );
-	// TLine *tl_posHCal_bottom = new TLine( posHCalYi, posHCalXi, posHCalYf, posHCalXi );
-	// tl_posHCal_left->Draw("same");
-	// tl_posHCal_right->Draw("same");
-	// tl_posHCal_top->Draw("same");
-	// tl_posHCal_right->Draw("same");
-
-	TPaveText *tpt_posHCal = new TPaveText(0.5, 0.70, 0.8, 0.85, "NDC");
-	tpt_posHCal->AddText(Form("posHCalXi = %0.4f", posHCalXi));
-	tpt_posHCal->AddText(Form("posHCalXf = %0.4f", posHCalXf));
-	tpt_posHCal->AddText(Form("posHCalYi = %0.4f", posHCalYi));
-	tpt_posHCal->AddText(Form("posHCalYf = %0.4f", posHCalYf));
-	tpt_posHCal->Draw("same");
+	h_dx_p_mean = new TH1D("h_dx_p_mean", Form("Gaussian mean for proton in dx - SBS%i %i, %s", kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_dx_p_sigma = new TH1D("h_dx_p_sigma", Form("Gaussian sigma for proton in dx - SBS%i %i, %s",kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_dx_n_mean = new TH1D("h_dx_n_mean", Form("Gaussian mean for neutron in dx - SBS%i %i, %s", kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_dx_n_sigma = new TH1D("h_dx_n_sigma", Form("Gaussian sigma for neutron in dx - SBS%i %i, %s",kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_dy_p_mean = new TH1D("h_dy_p_mean", Form("Gaussian mean for proton in dy - SBS%i %i, %s",kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_dy_p_sigma = new TH1D("h_dy_p_sigma", Form("Gaussian sigma for proton in dy - SBS%i %i, %s",kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_W_mean = new TH1D("h_W_mean", Form("Gaussian mean for W - SBS%i %i, %s",kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_W_sigma = new TH1D("h_W_sigma", Form("Gaussian sigma for W - SBS%i %i, %s",kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_W2_mean = new TH1D("h_W2_mean", Form("Gaussian mean for W2 - SBS%i %i, %s",kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_W2_sigma = new TH1D("h_W2_sigma", Form("Gaussian sigma for W2 - SBS%i %i, %s",kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_ADC_time_min = new TH1D("h_ADC_time_min", Form("ADC time min - SBS%i %i, %s",kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_ADC_time_max = new TH1D("h_ADC_time_max", Form("ADC time max - SBS%i %i, %s",kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_ADC_time_mean = new TH1D("h_ADC_time_mean", Form("ADC time mean - SBS%i %i, %s",kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_ADC_diff_time_min = new TH1D("h_ADC_diff_time_min", Form("ADC diff time min - SBS%i %i, %s",kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
+	h_ADC_diff_time_max = new TH1D("h_ADC_diff_time_max", Form("ADC diff time max - SBS%i %i, %s",kine, sbsfieldscale, run_target.Data()), 1, 0, 1);
 
 	cout << "Pulling experimental, fit, and other variables..." << endl;
 
@@ -502,6 +437,23 @@ Double_t ymax_dxdy = 2.5;
 		cout << endl << "Press any key to continue...." << endl;
 		std::cin.ignore(1000000000, '\n');
 	}
+
+	h_dx_p_mean->SetBinContent(1, dx_p);
+	h_dx_p_sigma->SetBinContent(1, dx_p_sigma);
+	h_dx_n_mean->SetBinContent(1, dx_n);
+	h_dx_n_sigma->SetBinContent(1, dx_n_sigma);
+	h_dy_p_mean->SetBinContent(1, dy_p);
+	h_dy_p_sigma->SetBinContent(1, dy_p_sigma);
+	h_W_mean->SetBinContent(1, W_mean);
+	h_W_sigma->SetBinContent(1, W_sigma);
+	h_W2_mean->SetBinContent(1, W2_mean);
+	h_W2_sigma->SetBinContent(1, W2_sigma);
+	h_ADC_time_min->SetBinContent(1, ADC_time_min);
+	h_ADC_time_max->SetBinContent(1, ADC_time_max);
+	h_ADC_time_mean->SetBinContent(1, ADC_time_mean);
+	h_ADC_diff_time_min->SetBinContent(1, ADC_diff_time_min);
+	h_ADC_diff_time_max->SetBinContent(1, ADC_diff_time_max);
+
 	cout << "Finished pulling variables. " << endl << endl;
 
 	cout << "Run parameters: " << endl;
@@ -610,21 +562,8 @@ Double_t ymax_dxdy = 2.5;
 				// TC->Add(Form("%s/gmn_parsed_LD2_SBS4_mag30_11496_11551_11562_17_01_2024.root", rootfile_dir.Data()));
 			}
 			if( kine == 8 ){
-				// cout << "adding: " << Form("%s/gmn_parsed_LD2_SBS8_mag70.root", rootfile_dir.Data()) << endl;
-				// TC->Add(Form("%s/gmn_parsed_LD2_SBS8_mag70.root", rootfile_dir.Data()));
-
-				// cout << "adding: " << Form("%s/gmn_parsed_LD2_SBS8_mag70_part*", rootfile_dir.Data()) << endl;
-				// TC->Add(Form("%s/gmn_parsed_LD2_SBS8_mag70_part*", rootfile_dir.Data()));
-
-				// cout << "adding: " << Form("%s/gmn_parsed_LD2_SBS8_mag70_09_01_2024.root", rootfile_dir.Data()) << endl;
-				// TC->Add(Form("%s/gmn_parsed_LD2_SBS8_mag70_09_01_2024.root", rootfile_dir.Data()));
-
-				cout << "adding: " << Form("%s/gmn_parsed_LD2_SBS8_mag70_05_10_2023.root", rootfile_dir.Data()) << endl;
-				TC->Add(Form("%s/gmn_parsed_LD2_SBS8_mag70_05_10_2023.root", rootfile_dir.Data()));
-
-				//Systematics parsed files test
-				cout << "adding: " << Form("%s/gmn_parsed_LD2_SBS8_mag70_systematics.root", rootfile_dir.Data()) << endl;
-				TC->Add(Form("%s/gmn_parsed_LD2_SBS8_mag70_systematics.root", rootfile_dir.Data()));				
+				cout << "adding: " << Form("%s/gmn_parsed_LD2_SBS8_mag70_09_01_2024.root", rootfile_dir.Data()) << endl;
+				TC->Add(Form("%s/gmn_parsed_LD2_SBS8_mag70_09_01_2024.root", rootfile_dir.Data()));
 
 				// cout << "adding: " << Form("%s/gmn_parsed_LD2_SBS8_mag70_13616_13617_13618_13620_14_01_2024.root", rootfile_dir.Data()) << endl;
 				// TC->Add(Form("%s/gmn_parsed_LD2_SBS8_mag70_13616_13617_13618_13620_14_01_2024.root", rootfile_dir.Data()));				
@@ -637,12 +576,8 @@ Double_t ymax_dxdy = 2.5;
 				cout << "adding: " << Form("%s/gmn_parsed_LD2_SBS9_mag70.root", rootfile_dir.Data()) << endl;
 				TC->Add(Form("%s/gmn_parsed_LD2_SBS9_mag70.root", rootfile_dir.Data()));
 
-				//Systematics parsed files test
-				// cout << "adding: " << Form("%s/gmn_parsed_LD2_SBS9_mag70_systematics.root", rootfile_dir.Data()) << endl;
-				// TC->Add(Form("%s/gmn_parsed_LD2_SBS9_mag70_systematics.root", rootfile_dir.Data()));
-
 				// cout << "adding: " << Form("%s/gmn_parsed_LD2_SBS9_mag70_09_01_2024.root", rootfile_dir.Data()) << endl;
-				// TC->Add(Form("%s/gmn_parsed_LD2_SBS9_mag70_09_01_2024.root",s rootfile_dir.Data()));
+				// TC->Add(Form("%s/gmn_parsed_LD2_SBS9_mag70_09_01_2024.root", rootfile_dir.Data()));
 
 				// cout << "adding: " << Form("%s/gmn_parsed_LD2_SBS9_mag70_13765_13766_13770_13771_13773_13777_13797_14_01_2024.root", rootfile_dir.Data()) << endl;
 				// TC->Add(Form("%s/gmn_parsed_LD2_SBS9_mag70_13765_13766_13770_13771_13773_13777_13797_14_01_2024.root", rootfile_dir.Data()));
@@ -806,6 +741,8 @@ Double_t ymax_dxdy = 2.5;
 	cout << " done. " << endl;
 	cout << "--------------------------------------" << endl;
 
+
+
 	p_Beam = E_beam/(1.0 + E_beam/Mp*(1.0 - cos(BB_theta)));
 
 	E_loss_outgoing = cell_diameter/2.0/sin(BB_theta)*rho_tgt*dEdx_tgt; //Should be about 1 MeV
@@ -826,7 +763,7 @@ Double_t ymax_dxdy = 2.5;
 
 	if( kine == 8 ){
 		Ep_sig_mult = 2.0;
-		SH_PS_sig_mult = 4.0;		
+		SH_PS_sig_mult = 2.0;		
 	}
 	if( kine == 9 ){
 		Ep_sig_mult = 3.0;
@@ -843,11 +780,17 @@ Double_t ymax_dxdy = 2.5;
 				"bb.ps.nclus>0",
 				"bb.sh.nclus>0",
 				"abs(bb.tr.vz[0])<0.075",
-				"bb.gem.track.nhits[0]>3", //***3
-				"bb.tr.n==1"
+				"bb.gem.track.nhits[0]>3",
+				"bb.tr.n==1",
 				"bb.ps.e>0.15",
+				// Form("bb.tr.p[0]>%f", 1.10*lookup_parsed_cut(run_target.Data(), kine, sbsfieldscale, "SH_PS_mean") ),
 				"sbs.hcal.e>0.05",
-
+				// // "((abs(((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))))-0.98)<0.15",
+				// "bb.ps.e+bb.sh.e>2.5"; -->bb.tr.p[0]
+				// // Form("bb.ps.e>%f", lookup_parsed_cut(run_target, kine, sbsfieldscale, "PS_min")),
+				// Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)&&((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))<(%f)", Ep_min, Ep_max),
+				// // // // Form("((abs(((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))))-%f)<%f", lookup_parsed_cut(runnum, "Ep"), lookup_parsed_cut(runnum, "Ep_sigma")),
+				// Form("sbs.hcal.e>%f",lookup_parsed_cut(run_target, kine, sbsfieldscale, "HCal_clus_e_cut")),
 				Form("(bb.sh.e+bb.ps.e)>%f", SH_PS_min),
 				Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)", Ep_min)
 			};
@@ -868,18 +811,40 @@ Double_t ymax_dxdy = 2.5;
 	if( kine == 8 ){
 		if( !use_parsed ){
 			master_cut_vec = {
-				"sbs.hcal.e>0.005",
 				"sbs.hcal.nclus>0",
 				"bb.ps.nclus>0",
 				"bb.sh.nclus>0",
 				"abs(bb.tr.vz[0])<0.075",
-				"bb.gem.track.nhits[0]>1",
+				"bb.gem.track.nhits[0]>2",
 				"bb.tr.n==1",
-				"bb.ps.e>0.2",
+				"bb.ps.e>0.15",
+				
+				// "sbs.hcal.nclus>0",
+				// "bb.ps.nclus>0",
+				// "bb.sh.nclus>0",
+				// "abs(bb.tr.vz[0])<0.075",
+				// "bb.gem.track.nhits[0]>3",
+				// "bb.tr.n==1",
+				// "bb.ps.e>0.2",
+				// // Form("bb.tr.p[0]>%f", 1.10*lookup_parsed_cut(run_target.Data(), kine, sbsfieldscale, "SH_PS_mean") ),
+				// "sbs.hcal.e>0.005",
+				// // // "((abs(((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))))-0.98)<0.15",
+				// // "bb.ps.e+bb.sh.e>2.5"; -->bb.tr.p[0]
+				// // // Form("bb.ps.e>%f", lookup_parsed_cut(run_target, kine, sbsfieldscale, "PS_min")),
+				// // Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)", 0.8),
+				// // Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))<(%f)", 1.25),
+				// // // // // Form("((abs(((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))))-%f)<%f", lookup_parsed_cut(runnum, "Ep"), lookup_parsed_cut(runnum, "Ep_sigma")),
+				// // Form("sbs.hcal.e>%f",lookup_parsed_cut(run_target, kine, sbsfieldscale, "HCal_clus_e_cut")),
+				// // Form("(bb.sh.e+bb.ps.e)>%f", SH_PS_min),
+				// // "bb.sh.e>2.6",
+				// // "bb.tr.p[0]>3.0",
+				// Form("sbs.hcal.clus_blk.atime[0]>%f", 0.75*ADC_time_min),
+				// Form("sbs.hcal.clus_blk.atime[0]<%f", 1.25*ADC_time_max),
+				// // "bb.sh.atimeblk>-12",
+				// // "bb.sh.atimeblk<12", 		
 				Form("(bb.sh.e+bb.ps.e)>%f", SH_PS_min),
-				Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)", 0.90)
-
-				////// Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)&&((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))<(%f)", Ep_min, Ep_max),
+				Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)", 0.5)
+				// Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)&&((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))<(%f)", Ep_min, Ep_max),
 				};
 			}
 		if( use_parsed ){
@@ -889,11 +854,11 @@ Double_t ymax_dxdy = 2.5;
 				"bb.ps.nclus>0",
 				"bb.sh.nclus>0",
 				"abs(bb.tr.vz[0])<=0.075",
-				"bb.gem.track.nhits[0]>1",
+				"bb.gem.track.nhits[0]>3",
 				"bb.tr.n==1",
 				"bb.ps.e>0.2",
-				Form("(bb.sh.e+bb.ps.e)>%f", SH_PS_min),
-				Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)", 0.75)
+				// Form("(bb.sh.e+bb.ps.e)>%f", SH_PS_min),
+				Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)", 0.5)
 				};
 			}
 	}
@@ -905,7 +870,7 @@ Double_t ymax_dxdy = 2.5;
 					"bb.ps.nclus>0",
 					"bb.sh.nclus>0",
 					"abs(bb.tr.vz[0])<=0.075",
-					"bb.gem.track.nhits[0]>1",
+					"bb.gem.track.nhits[0]>3",
 					"bb.tr.n==1",
 					"bb.ps.e>0.2",
 					Form("((bb.sh.e+bb.ps.e)/(bb.tr.p[0]))>(%f)", 0.5)
@@ -918,7 +883,7 @@ Double_t ymax_dxdy = 2.5;
 					"bb.ps.nclus>0",
 					"bb.sh.nclus>0",
 					"abs(bb.tr.vz[0])<0.075",
-					"bb.gem.track.nhits[0]>1",
+					"bb.gem.track.nhits[0]>3",
 					"bb.tr.n==1",
 					"bb.ps.e>0.20",
 					Form("(bb.sh.e+bb.ps.e)>%f", SH_PS_min),
@@ -1027,26 +992,10 @@ Double_t ymax_dxdy = 2.5;
 			hcal_y = hcal_clus_y[hcal_clus_e_sorted[0].index];			
 		}
 
-		h_HCal_e->Fill(hcal_e);
-		h2_hcal_e_V_clus_e->Fill(hcal_clus_e[0], hcal_e);
-		if( sort_hcal_cluster_energy ){
-			h_hcal_clus_e_sorted->Fill(hcal_clus_e_sorted[0].ArrayValue);
-			h2_hcal_e_V_clus_e_sorted->Fill(hcal_clus_e_sorted[0].ArrayValue, hcal_e);
-			h2_hcal_clus_e_V_hcal_clus_e_sorted->Fill(hcal_clus_e[0], hcal_clus_e_sorted[0].ArrayValue);
-		}
-		h_hcal_clus_e->Fill(hcal_clus_e[0]);
-
-		for( int index = 0; index < 10; index++ ){
-			h_hcal_clus_e_indexed->SetBinContent(index, h_hcal_clus_e_indexed->GetBinContent(index) + hcal_clus_e[index] );
-			h_hcal_clus_e_sorted_indexed->SetBinContent(index, h_hcal_clus_e_sorted_indexed->GetBinContent(index) + hcal_clus_e_sorted[index].ArrayValue);
-		}
 
 	//Timing stuff
-		h_hcal_clusblk_ADC_time->Fill(hcal_clusblk_ADC_time[0]);
 		
 		hcal_clus_ADCtime_diff = hcal_clusblk_ADC_time[0] - bb_sh_atimeblk;
-		h_bb_sh_atimeblk->Fill(bb_sh_atimeblk);
-		h_hcal_clusblk_ADC_time_diff->Fill(hcal_clus_ADCtime_diff);
 
 		bool b_hcal_clusblk_ADC_cut = false;
 		bool b_adc_diff_time_cut = false;
@@ -1056,7 +1005,6 @@ Double_t ymax_dxdy = 2.5;
 			if( (hcal_clusblk_ADC_time[0] < 0.9*ADC_time_min) || (hcal_clusblk_ADC_time[0] > 1.1*ADC_time_max) ){
 				b_hcal_clusblk_ADC_cut = true;
 				n_hcal_clusblk_atime_cut++;
-				h_hcal_clusblk_ADC_time_cut->Fill(hcal_clusblk_ADC_time[0]);
 				continue;
 			}			
 		}
@@ -1066,52 +1014,21 @@ Double_t ymax_dxdy = 2.5;
 			if( (hcal_clus_ADCtime_diff < 0.9*ADC_diff_time_min) || (hcal_clus_ADCtime_diff > 1.1*ADC_diff_time_max) ){
 				b_adc_diff_time_cut = true;
 				n_adc_diff_time_cnt++;
-				h_hcal_clusblk_ADC_time_diff_cut->Fill(hcal_clus_ADCtime_diff);
 				continue;
 			}			
 		}
 
 
-		// double bbcal_time=0.0, hcal_time=0.0;
-
-		// for(int ihit=0; ihit<TDCTndata; ihit++){
-		// 	if(TDCT_id[ihit]==5){
-		// 		bbcal_time=TDCT_tdc[ihit];
-		// 	}
-		// 	if(TDCT_id[ihit]==0){
-		// 		hcal_time=TDCT_tdc[ihit];
-		// 	}
-		// }
-
-		// double diff = hcal_time - bbcal_time; 
-
-		// if( fabs(diff - tdiff)>tdiff_max ){
-		// 	continue;
-		// }
-
-		//Sanity check
-      	// if( (int)bb_tr_n!=1 ){
-      	// 	cout << "**************************************************************" << endl;
-      	// 	cout << "--------------------------------------------------------------" << endl;
-      	// 	cout << endl << endl << "WARNING: Total tracks not as expected from global cut. Check globalcut for errors." << endl << endl;
-      	// 	cout << "--------------------------------------------------------------" << endl;
-      	// 	cout << "**************************************************************" << endl;
-      	// } 
-		h_HCal_xy_std->Fill( hcal_y, hcal_x );
 
       	if( correct_beam_energy ){
       		Eloss = (bb_tr_vz[0]+l_tgt/2.0) * rho_tgt * dEdx_tgt + uwallthick_LH2 * rho_Al * dEdx_Al; //approximately 3 MeV
-      		h_E_eloss->Fill( Eloss );
 
       		E_beam_final = E_beam - Eloss;
-      		h_E_ecorr_vs_vert->Fill( bb_tr_vz[0], E_beam_final);
       	}
       	if( !correct_beam_energy){
       		Eloss = (bb_tr_vz[0]+l_tgt/2.0) * rho_tgt * dEdx_tgt + uwallthick_LH2 * rho_Al * dEdx_Al; //approximately 3 MeV
-      		h_E_eloss->Fill( Eloss );
 
       		E_beam_final = E_beam;
-      		h_E_ecorr_vs_vert->Fill( bb_tr_vz[0], E_beam_final);
       	}
 
       	////Corrections
@@ -1163,20 +1080,16 @@ Double_t ymax_dxdy = 2.5;
 		x_expected_HCal = (HCAL_intersect - HCAL_origin).Dot( HCAL_xaxis );
 		y_expected_HCal = (HCAL_intersect - HCAL_origin).Dot( HCAL_yaxis );
 
-		h_HCal_xy_expected_std->Fill( y_expected_HCal, x_expected_HCal );
-
 //--------------------------------------------------------------
 //Calculate theta pq variables
       	//Reconstructed momentum, corrected for mean loss exiting the target
 		p_recon = bb_tr_p[0] + E_loss_outgoing; 
 
-		h_p_nucleon->Fill(p_recon);
 
 		TLorentzVector k_prime_recon(p_recon*bb_tr_px[0]/bb_tr_p[0], p_recon*bb_tr_py[0]/bb_tr_p[0], p_recon*bb_tr_pz[0]/bb_tr_p[0], p_recon);
 		TLorentzVector q_recon = P_beam - k_prime_recon;
 		TVector3 qvec_recon = q_recon.Vect();
 
-		h_q_vec->Fill(qvec_recon.Mag());
 
 	//Calculate q vector as beam momentum - scattered k
 		TLorentzVector q = P_beam - k_prime;
@@ -1184,7 +1097,6 @@ Double_t ymax_dxdy = 2.5;
 		double p_miss;
 		p_miss = qvec_recon.Mag() - E_pp;
 
-		h_p_miss->Fill(p_miss);
 
 
 	//Expected neutron direction
@@ -1203,10 +1115,8 @@ Double_t ymax_dxdy = 2.5;
 		// and negative if p_miss dot q_vec is negative
 
 		if( qvec_recon.Dot(Proton_Direction.Unit()) > 0 ){
-			h_p_miss_pos->Fill(p_miss);
 		}
 		if( qvec_recon.Dot(Proton_Direction.Unit()) < 0 ){
-			h_p_miss_neg->Fill(p_miss);
 		}			
 
 		// theta_pq_n = acos( Neutron_Direction.Dot( q.Vect() ) );
@@ -1214,12 +1124,6 @@ Double_t ymax_dxdy = 2.5;
 
 		theta_pq_n = acos(Neutron_Direction.Dot( qvec_recon.Unit() ));
 		theta_pq_p = acos(Proton_Direction.Dot( qvec_recon.Unit() ));
-
-		// h_theta_pq_n->Fill(theta_pq_n);
-		// h_theta_pq_p->Fill(theta_pq_p);
-
-		h_theta_pq_n->Fill( theta_pq_n );
-		h_theta_pq_p->Fill( theta_pq_p );
 
 	//---------------------------
 		if( theta_pq_cut ){
@@ -1326,19 +1230,21 @@ Double_t ymax_dxdy = 2.5;
 		double W_recon = 0.0;
 
 		E_ep = sqrt( pow(Me,2) + pow(bb_tr_p[0],2) ); // Obtain the scattered electron energy
-		h_E_ep->Fill( E_ep );
 
 		p_ep = bb_tr_p[0];
 
-		h_tr_p->Fill(bb_tr_p[0]);
-
 		Q2 = 2*E_beam_final*E_ep*( 1-(bb_tr_pz[0]/p_ep) ); // Obtain Q2 from beam energy, outgoing electron energy, and momenta
-		h_Q2->Fill( Q2 );
+
+		h_Q2->Fill(Q2);
 
 		//Get invariant mass transfer W from the four-momentum of the scattered nucleon
 		W = P_gammaN.M();
 		W_recon = P_gammaN_second.M();
 		W2 = pow(W, 2);
+
+		output_W = W;
+		output_W2 = W2;
+
 		h_W->Fill( W );
 		h_W2->Fill(W2);
 		h_W2recon->Fill( pow(W_recon, 2) );
@@ -1346,23 +1252,14 @@ Double_t ymax_dxdy = 2.5;
 		//Use the electron kinematics to predict the proton momedntum assuming elastic scattering on free proton at rest (will need to correct for fermi motion):
 		E_pp = nu + Mp; // Get energy of the proton
 		E_nucleon = sqrt(pow(pp,2)+pow(Mp,2)); // Check on E_pp, same
-		h_E_pp->Fill( E_nucleon ); // Fill histogram
-
-		h_p_nucleon->Fill(E_nucleon);
 
 		KE_p = nu; // For elastics
-		h_KE_p->Fill( KE_p );
+
 
 		Double_t Ep = (bb_ps_e + bb_sh_e)/(bb_tr_p[0]);
 		Double_t PS = bb_ps_e;
 		Double_t SHPS = bb_ps_e + bb_sh_e;
 		Double_t HCal_e = hcal_e;
-
-		h_Ep->Fill(Ep);
-		h_PS->Fill(PS);
-		h_SHPS->Fill(SHPS);
-		h_HCal_e->Fill(hcal_e);
-
 
 		if( use_best_cluster ){
 			dx = dx_bestcluster;
@@ -1376,36 +1273,22 @@ Double_t ymax_dxdy = 2.5;
 			//testing dy calc function:
 			// dy = calc_dy_as_HCalx_sub_xExp( hcal_y, bb_tr_vz[0], bb_tr_p[0], bb_tr_px[0], bb_tr_py[0] , bb_tr_pz[0]);		
 		}
-		h_dx_W->Fill( W, dx );
-		h_dx_W2->Fill( W2, dx );
-
-		h_dy_W->Fill( W, dy );
-		h_dy_W2->Fill( W2, dy );
 
 	//If using the scoring method for best cluster we need to sort through the scores and matches and pick a best cluster
 	//This is all based on the original priority_best_cluster.
 	//I think we should work chronogically from score 0 to score 3
 
 		//Resolve the hadron spots without cuts
+		output_dx = dx;
+		output_dy = dy;
+
 		h_dx->Fill( dx );
 		h_dy->Fill( dy );
 
-		if( dy > -0.5 && dy < 0.5 && W > 1.25 && W < 1.75 ){
-			h_dx_dyW_select_cut_dy00_W15->Fill(dx);		
-		}
-		if( dy > 1.0 && W > 1.25 && W < 1.75 ){
-			h_dx_dyW_select_cut_dy15_W15->Fill(dx);		
-		}
-		
 		h_dxdy->Fill( dy, dx );
-		h_xy->Fill( hcal_y, hcal_x );
 
 		dxdy_cnt++;
 
-	// Coincidence timing cut and vertex cut to resolve W well
-		// if( fabs(diff - tdiff)<tdiff_max && fabs(bb_tr_vz[0])<=0.075 ){
-		// 	h_W_cut->Fill( W );
-		// } 
 
 		double w2_mult;
 		if( kine == 4 ){
@@ -1418,27 +1301,10 @@ Double_t ymax_dxdy = 2.5;
 			w2_mult = 1.5;
 		}
 
-		//dx from only higher W regions:
-		if( W > 1.5082720 ){
-			h_dx_large_W_cut->Fill( dx );
-			h_dy_large_W_cut->Fill( dy );
-		}
 
-		if( Wcut_type == "W" ){
-			Wcut_select = W;
-			Wcut_select_mean = W_mean;
-			Wcut_select_sigma = W_sigma;
-		}
-		else{
-			Wcut_select = W2;
-			Wcut_select_mean = W2_mean;
-			Wcut_select_sigma = W2_sigma;
-		}
-
-		//W cut based on W or W2 selection:
-		if( fabs(Wcut_select - Wcut_select_mean) < w2_mult*Wcut_select_sigma ){
 		// Preliminary HCal projections with single cut on W2
-		// if( fabs(W2 - W2_mean) < w2_mult*W2_sigma ){
+		wcut_applied = 0;
+		if( fabs(W - W_mean) < w2_mult*W_sigma ){
 
 		// Preliminary HCal projections with single cut on W
 		// if( fabs(W - W_mean) < w2_mult*W_sigma ){
@@ -1447,51 +1313,20 @@ Double_t ymax_dxdy = 2.5;
 			h_dx_wcut->Fill( dx );
 			h_dy_wcut->Fill ( dy );
 			h_dxdy_wcut->Fill( dy, dx );
-			h_W_cut->Fill( W );
-			h_tr_p_wcut->Fill( bb_tr_p[0] );
-			h_SHPS_wcut->Fill( SHPS );
-			h_Ep_wcut->Fill( Ep );
 
-			if( true ){
-				if( theta_pq_n < theta_pq_n_thresh){
-					h_theta_pq_n_cut->Fill( dx );
-				}
-				if( theta_pq_n > theta_pq_n_thresh){
-					h_theta_pq_n_anticut->Fill( dx );
-				}
-
-				if( theta_pq_p < theta_pq_p_thresh){
-					h_theta_pq_p_cut->Fill( dx );
-				}
-				if( theta_pq_p > theta_pq_p_thresh){
-					h_theta_pq_p_anticut->Fill( dx );
-				}		
-			}
+			output_dx_wcut = dx;
+			output_dy_wcut = dy;
+			wcut_applied = 1;
 
 			dxdy_wcut_cnt++;
 		}
 
-		//Populate position histograms with cuts
-		h_dxdy_cut->Fill( dy, dx );
-		h_dx_cut->Fill( dx );
-		h_dy_cut->Fill( dy );
-
-		//Populate BB/HCal correlation histograms from elastics
-		h_PAngleCorr_phi->Fill( e_prime_phi, nucleon_phi );
-		h_PAngleCorr_theta->Fill( e_prime_theta, nucleon_theta );
-
-		//Fill vertex position histogram for cut on tracks
-    	h_vz_cut->Fill( bb_tr_vz[0] );
-
-
-
 		//Check "elastic" events on center HCal for id with spot checks
 		bool HCal_on = false;
-
 		bool is_p = false;
 		bool is_n = false;
 
-		double fcut_mult = 2.0;
+		double fcut_mult = 2;
 
 		if( use_acceptance_cut ){
 			//Acceptance cut
@@ -1505,46 +1340,17 @@ Double_t ymax_dxdy = 2.5;
 
 	//FIDUCIAL Cut
 		if( fiducial_cut ){
-			// apply_fcut = false;
 			fiducial_active_area_xmax = hcal_x_fmax - dx_pn_max - fcut_mult*dx_p_sigma;
 			fiducial_active_area_xmin = hcal_x_fmin + dx_pn_max + fcut_mult*dx_p_sigma;
 			fiducial_active_area_ymax = hcal_y_fmax - fcut_mult*dy_p_sigma;
 			fiducial_active_area_ymin = hcal_y_fmin + fcut_mult*dy_p_sigma;
-			// cout << "---------------------------" << endl;
-			// cout << "xmax: " << fiducial_active_area_xmax << endl;
-			// cout << "hcal_x_fmax: " << hcal_x_fmax << endl;
-			// cout << "dx_pn_max: " << dx_pn_max << endl;
-			// cout << "dx_p_sigma: " << dx_p_sigma << endl;
-			// cout << "xmin: " << fiducial_active_area_xmin << endl;
-			// cout << "ymax: " << fiducial_active_area_ymax << endl;
-			// cout << "ymin: " << fiducial_active_area_ymin << endl;
 			// if( ((y_expected_HCal - fcut_mult*dy_p_sigma) > hcal_y_fmin) && ((y_expected_HCal + fcut_mult*dy_p_sigma) < hcal_y_fmax) && ((x_expected_HCal - dx_pn_max - fcut_mult*dx_p_sigma) > hcal_x_fmin) && ((x_expected_HCal + dx_pn_max + fcut_mult*dx_p_sigma) < hcal_x_fmax) ){
 			// 	apply_fcut = true;
 			// }
-			if( ((hcal_y - fcut_mult*dy_p_sigma) > hcal_y_fmin) && ((hcal_y + fcut_mult*dy_p_sigma) < hcal_y_fmax) && ((hcal_x - dx_pn_max - fcut_mult*dx_p_sigma) > hcal_x_fmin) && ((hcal_x + dx_pn_max + fcut_mult*dx_p_sigma) < hcal_x_fmax) ){
+			if( (hcal_x < fiducial_active_area_xmax) && (hcal_x > fiducial_active_area_xmin) && (hcal_y < fiducial_active_area_ymax) && (hcal_y > fiducial_active_area_ymin) ){
 				apply_fcut = true;
-			}			
-			//Was this, trying new on Jan 25, 2024
-			// if( (hcal_x < fiducial_active_area_xmax) && (hcal_x > fiducial_active_area_xmin) && (hcal_y < fiducial_active_area_ymax) && (hcal_y > fiducial_active_area_ymin) ){
-			// 	apply_fcut = true;
-			// }
+			}
 
-			//Jan 25, 2024
-			// if( (x_expected_HCal < fiducial_active_area_xmax) && (x_expected_HCal > fiducial_active_area_xmin) && (y_expected_HCal < fiducial_active_area_ymax) && (y_expected_HCal > fiducial_active_area_ymin) ){
-			// 	apply_fcut = true;
-			// }
-
-		//For testing out the effect of fcut_mult.... let's have a section to always look at 2*fcut_mult and 3*fcut_mult
-			if( ((y_expected_HCal - 2.0*fcut_mult*dy_p_sigma) > hcal_y_fmin) && ((y_expected_HCal + 2.0*fcut_mult*dy_p_sigma) < hcal_y_fmax) && ((x_expected_HCal - dx_pn_max - 2.0*fcut_mult*dx_p_sigma) > hcal_x_fmin) && ((x_expected_HCal + dx_pn_max + 2.0*fcut_mult*dx_p_sigma) < hcal_x_fmax) ){
-				if( fabs(W - W_mean) < w2_mult*W_sigma ){
-					h_dxdy_wcut_2multfcut->Fill( dy, dx );
-				}
-			}	
-			if( ((y_expected_HCal - 1.5*fcut_mult*dy_p_sigma) > hcal_y_fmin) && ((y_expected_HCal + 1.5*fcut_mult*dy_p_sigma) < hcal_y_fmax) && ((x_expected_HCal - dx_pn_max - 1.5*fcut_mult*dx_p_sigma) > hcal_x_fmin) && ((x_expected_HCal + dx_pn_max + 1.5*fcut_mult*dx_p_sigma) < hcal_x_fmax) ){
-				if( fabs(W - W_mean) < w2_mult*W_sigma ){
-					h_dxdy_wcut_15multfcut->Fill( dy, dx );
-				}
-			}	
 			if( ( pow( (hcal_x - x_expected_HCal - dx_p)/dx_p_sigma,2) + pow( (hcal_y - y_expected_HCal - dy_p)/dy_p_sigma,2) ) <= pow(1.5,2) ){
 				is_p = true;
 				is_n = false;
@@ -1555,18 +1361,15 @@ Double_t ymax_dxdy = 2.5;
 				is_n = true;
 			}
 
-	//Fill respective histograms for these checks.
-			if( HCal_on && is_n && apply_fcut ) h_dxdy_ncut->Fill( dy, dx );
-			if( HCal_on && is_p && apply_fcut ) h_dxdy_pcut->Fill( dy, dx );
-
 	//----------ALL HADRONS
+			fcut_applied = 0;
+			wcut_fcut_applied = 0;
+
 			if( HCal_on && apply_fcut ){
-				h_HCal_xy_fcut->Fill( hcal_y, hcal_x);
-				h_HCal_xy_expected_fcut->Fill( y_expected_HCal, x_expected_HCal );
+				fcut_applied = 1;
 				h_dxdy_fcut->Fill( dy, dx );
 				h_dx_fcut->Fill( dx );
-				h_W_fcut->Fill( W );
-				h_xy_fcut->Fill( hcal_y, hcal_x );
+
 				//including work cut
 				if( fabs(W - W_mean) < w2_mult*W_sigma ){
 				// if( fabs(W - 0.94) < 0.375 ){
@@ -1574,41 +1377,28 @@ Double_t ymax_dxdy = 2.5;
 					h_dx_wcut_fcut->Fill( dx );
 					h_dy_wcut_fcut->Fill ( dy );
 					h_dxdy_wcut_fcut->Fill( dy, dx );
-					if( (hcal_clusblk_ADC_time[0] > 0.75*ADC_time_min) || (hcal_clusblk_ADC_time[0] < 1.25*ADC_time_max) ){
-						h_dxdy_wcut_fcut_ADCtiming->Fill( dy, dx );
-					}
-					if( (hcal_clusblk_ADC_time[0] < 0.75*ADC_time_min) || (hcal_clusblk_ADC_time[0] > 1.25*ADC_time_max) ){
-						h_dxdy_wcut_fcut_AntiADCtiming->Fill( dy, dx );
-					}
+
+					output_dx_wcut_fcut = dx;
+					output_dy_wcut_fcut = dy;
+					wcut_fcut_applied = 1.0;
 				}
 
 				elastic_yield++;				
 			}
 
-	//----------neutron
-			if( HCal_on && is_n && apply_fcut ){
-				// if( (hcal_x - dx_pn_max )>hcal_x_fmin ){
-					h_xy_cut_n->Fill( hcal_y, hcal_x );
-				// }
-			}
-	//----------proton
-			else if( HCal_on && is_p && apply_fcut ){
-				// if( (hcal_x + dx_pn_max)<hcal_x_fmax ){
-					h_xy_cut_p->Fill( hcal_y, hcal_x );
-				// }
-			}
 		}
 	//END OF FIDUCIAL Cut
 		//Still should count elastic yields if we got this far.....
 		if( !fiducial_cut ){
 			elastic_yield++;
 		}
+
+	//FILL THE OUTPUT TREE......
+		outputVarTree->Fill();
+
 //end of events loop  
     }
 	
-	bb_tr_p_min = (0.01)*h_tr_p->FindFirstBinAbove(100);
-	bb_tr_p_wcut_min = (0.01)*h_tr_p_wcut->FindFirstBinAbove(100);
-	bb_tr_p_cut = min( bb_tr_p_min, bb_tr_p_wcut_min );
 
 	cout << "---------------------------------------" << endl;
 	cout << "-----Finished going through events-----" << endl;
@@ -1617,131 +1407,6 @@ Double_t ymax_dxdy = 2.5;
 	outfile->Write();
 	outfile->Close();
 
-    if( calibrate ){
-    	TFile *infile = new TFile(outfile->GetName(), "READ");
-
-    	TString h_plot_select = "wcut";
-    	cout << "Selected plot type: " << h_plot_select.Data() << endl << endl;
-    	TH1D *hin_dx_select;
-    	TH1D *hin_dy_select;
-    	TH1D *hin_dxdy_select;
-    	TH1D *hin_dx = static_cast<TH1D*>(infile->Get("h_dx"));
-
-    	hin_dx_select = static_cast<TH1D*>(infile->Get(Form("h_dx_%s", h_plot_select.Data())));
-    	hin_dy_select = static_cast<TH1D*>(infile->Get(Form("h_dy_%s", h_plot_select.Data())));
-    	hin_dxdy_select = static_cast<TH1D*>(infile->Get(Form("h_dxdy_%s", h_plot_select.Data())));
-
-    	TH1D *hin_hcal_clusblk_ADC_time = static_cast<TH1D*>(infile->Get("h_hcal_clusblk_ADC_time"));
-
-    	// TCanvas *c_hcal_clusblk_ADC_time = new TCanvas("c_hcal_clusblk_ADC_time", "c_hcal_clusblk_ADC_time", 600, 500);
-    	// h_hcal_clusblk_ADC_time->Draw();
-
-    	TCanvas *c_dx = new TCanvas("c_dx", "c_dx", 600, 500);
-    	hin_dx_select->Draw();
-  	
-  	//------ p -------
-    	TF1 *fit_dx_p = new TF1("fit_dx_p", fit_gaus, -1.5, -0.2, 3);
-  
-    	fit_dx_p->SetParName(0, "dx_p Norm");
-		fit_dx_p->SetParName(1, "dx_p Center");
-		fit_dx_p->SetParName(2, "dx_p Sigma");
-		fit_dx_p->SetLineColor(2);
-
-		if( kine == 4 && sbsfieldscale == 30){
-			fit_dx_p->SetParLimits(0, 0, hin_dx_select->GetMaximum());
-			fit_dx_p->SetParLimits(1, -0.7, -0.5);
-			fit_dx_p->SetParLimits(2, 0.1, 0.19);
-		}
-
-		if( kine == 4 && sbsfieldscale == 50){
-			fit_dx_p->SetParLimits(0, 0, hin_dx_select->GetMaximum());
-			fit_dx_p->SetParLimits(1, -1.1, -1.05);
-			fit_dx_p->SetParLimits(2, 0.1, 0.14);
-		}
-
-		if( kine == 8 && sbsfieldscale == 70){
-			fit_dx_p->SetParLimits(0, 0, hin_dx_select->GetMaximum());
-			fit_dx_p->SetParLimits(1, -1.0, -0.85);
-			fit_dx_p->SetParLimits(2, 0.1, 0.19);			
-		}
-		if( kine == 9 && sbsfieldscale == 70){
-			fit_dx_p->SetParLimits(0, 0, hin_dx_select->GetMaximum());
-			fit_dx_p->SetParLimits(1, -0.95, -0.85);
-			fit_dx_p->SetParLimits(2, 0.1, 0.16);			
-		}	
-	
-		hin_dx_select->Fit("fit_dx_p", "R+");
-		dx_p = fit_dx_p->GetParameter(1);
-		dx_p_sigma = fit_dx_p->GetParameter(2);	
-
-	//------ n -------
-    	TF1 *fit_dx_n = new TF1("fit_dx_n", fit_gaus, -0.2, 0.5, 3);
-  
-    	fit_dx_n->SetParName(0, "dx_n Norm");
-		fit_dx_n->SetParName(1, "dx_n Center");
-		fit_dx_n->SetParName(2, "dx_n Sigma");
-		fit_dx_n->SetLineColor(3);
-
-		if( kine == 4 ){
-			fit_dx_n->SetParLimits(0, 0, (0.35)*hin_dx_select->GetMaximum());
-			fit_dx_n->SetParLimits(1, 0.0, 0.1);
-			fit_dx_n->SetParLimits(2, 0.1, 0.19);
-		}	
-
-		if( kine == 8 && sbsfieldscale == 70){
-			hin_dx_select->GetXaxis()->SetRangeUser(-dx_n_sigma, dx_n_sigma);
-			cout << "Max value for n: " << hin_dx_select->GetMaximum() << endl;
-			fit_dx_n->SetParLimits(0, 0, hin_dx_select->GetMaximum());
-			fit_dx_n->SetParLimits(1, -0.08, 0.08);
-			fit_dx_n->SetParLimits(2, 0.1, 0.18);
-			hin_dx_select->GetXaxis()->SetRangeUser(-2.5, 2.5);
-		}
-		if( kine == 9 && sbsfieldscale == 70){
-			fit_dx_n->SetParLimits(0, 0, hin_dx_select->GetMaximum());
-			fit_dx_n->SetParLimits(1, -0.05, 0.05);
-			fit_dx_n->SetParLimits(2, 0.1, 0.165);
-			hin_dx_select->GetXaxis()->SetRangeUser(-2.5, 2.5);
-		}	
-	
-		hin_dx_select->Fit("fit_dx_n", "R+");
-		dx_n = fit_dx_n->GetParameter(1);
-		dx_n_sigma = fit_dx_n->GetParameter(2);	
-
-	//------- dy -------
-    	TCanvas *c_dy = new TCanvas("c_dy", "c_dy", 600, 500);
-    	hin_dy_select->Draw();
-
-    	TF1 *fit_dy = new TF1("fit_dy", fit_gaus, -1.5, 1.5, 3);
-  
-    	fit_dy->SetParName(0, "dy Norm");
-		fit_dy->SetParName(1, "dy Center");
-		fit_dy->SetParName(2, "dy Sigma");
-		fit_dy->SetLineColor(3);
-
-		if( kine == 9 ){
-			fit_dy->SetParLimits(0, 0, hin_dy_select->GetMaximum());
-			fit_dy->SetParLimits(1, -0.08, 0.08);
-			fit_dy->SetParLimits(2, 0.1, 0.19);				
-		}
-		else{
-			fit_dy->SetParLimits(0, 0, hin_dy_select->GetMaximum());
-			fit_dy->SetParLimits(1, -0.15, 0.15);
-			fit_dy->SetParLimits(2, 0.1, 0.25);				
-		}
-
-	
-		hin_dy_select->Fit("fit_dy", "R+");
-		dy_p = fit_dy->GetParameter(1);
-		dy_p_sigma = fit_dy->GetParameter(2);	
-
-	//------- dxdy -------
-    	TCanvas *c_dxdy = new TCanvas("c_dxdy", "c_dxdy", 600, 500);
-    	hin_dxdy_select->Draw("colz");
-
-    	TCanvas *c_h_dx = new TCanvas("c_h_dx", "c_dx", 600, 500);
-    	hin_dx->Draw();
-
-    }
 
 	cout << "------------------------------------------------------------------"<< endl;
 	cout << "                       ANALYSIS FINISHED" << endl;
