@@ -99,9 +99,16 @@ void run_inv_mass_fixed_min_vary_max(int kine_select = -1){
 	auto inv_mass_time_start = high_resolution_clock::now();
 	TStopwatch *StopWatch = new TStopwatch();
 
-	loop_val_min = 0.5;
-	loop_val_max = 0.6;
+	if( kine_select == 4 ){
+		loop_val_min = 0.4;
+		loop_val_max = 2.3;		
+	}
+	else{
+		loop_val_min = 0.4;
+		loop_val_max = 2.6;		
+	}
 	loop_val_step  = 0.1;
+	
 	max_steps = (loop_val_max - loop_val_min)/loop_val_step;
 
 	cout << "Running systematics on :" << endl;
@@ -339,7 +346,7 @@ void run_PS_min(int kine_select = -1){
 		loop_val_min = 0.0;
 		loop_val_max = 1.2;
 	}
-	loop_val_step  = 0.005;
+	loop_val_step  = 0.05;
 	max_steps = (loop_val_max - loop_val_min)/loop_val_step;
 
 	cout << "Running systematics on :" << endl;
